@@ -47,8 +47,7 @@ export function findKnownItems(text: string): RawItem[] {
     if (isMobName) continue;
 
     // 1. 1차 필터: 키워드 존재 여부
-    const lineWords = cleanLine.toLowerCase().split(/[
-\s\W]+/);
+    const lineWords = cleanLine.toLowerCase().split(/[\s\W]+/);
     const hasKeyword = lineWords.some(word => 
       word.length >= 3 && dbKeywords.has(word)
     );

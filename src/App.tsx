@@ -69,6 +69,8 @@ function App() {
     }
 
     // ★ AI 비전 분석 시작 (이미지 자체를 분석)
+    // 텍스트 창에 분석 중임을 표시
+    setText("🔄 AI가 이미지를 정밀 분석 중입니다...\n잠시만 기다려주세요. (약 5~10초)");
     analyzeImage(selectedFile);
   };
 

@@ -109,15 +109,42 @@ export async function detectItemSlots(file: File, threshold: number = 100): Prom
 
       const itemImages: string[] = [];
       
-      // 너무 많은 Blob은 성능 저하 -> 상위 10개만 테스트 (또는 적절히 필터링)
-      // 여기서는 겹치는 박스 제거(NMS) 등은 생략하고 단순 반환
-      const validBlobs = blobs.slice(0, 12); // 최대 12개 슬롯만 분석 (데모용)
+      // Blob 감지 결과가 없거나 너무 적으면, 강제로 그리드로 자릅니다 (Fallback)
+      let finalBlobs = blobs;
+      if (blobs.length < 3) {
+         // 4x4 그리드로 강제 분할
+         const cols = 4;
+         const rows = 4;
+         const cellW = img.width / cols;
+         const cellH = img.height / rows;
+         
+         finalBlobs = [];
+         for(let r=0; r<rows; r++) {
+            for(let c=0; c<cols; c++) {
+               finalBlobs.push({
+                  x: c * cellW,
+                  y: r * cellH,
+                  width: cellW,
+                  height: cellH
+               });
+            }
+         }
+      }
+
+      // 너무 많은 Blob은 성능 저하 -> 상위 16개만 테스트
+      const validBlobs = finalBlobs.slice(0, 16); 
 
       validBlobs.forEach(blob => {
         cropCanvas.width = blob.width;
         cropCanvas.height = blob.height;
         
-        // 원본 이미지에서 해당 영역만 그리기
+        // 원본 이미지에서 해당 영역만 그리기 (스케일 복구 불필요, 위에서 원본 크기 기준 계산함? 아님. 위에는 scale 적용된 좌표임.)
+        // 주의: 위 Fallback 로직은 원본 좌표계. Blob 로직은 scale 좌표계.
+        // 따라서 Blob 좌표를 원본으로 변환해야 함.
+        
+        // 기존 blob 로직은 이미 scale로 나눴음(원본 좌표계). Fallback도 원본 좌표계.
+        // OK.
+        
         cropCtx.drawImage(
           img, 
           blob.x, blob.y, blob.width, blob.height, 
