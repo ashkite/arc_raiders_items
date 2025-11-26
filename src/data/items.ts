@@ -1,12 +1,46 @@
 import { ItemMetadata } from '../types';
 
 /**
- * Arc Raiders 아이템 데이터베이스 (Wiki & Community Data Verified)
+ * Arc Raiders 아이템 데이터베이스 (Comprehensive Wiki Data)
  */
 export const ITEMS_DB: Record<string, ItemMetadata> = {
-  // --- Medical & Consumables (회복 및 소모품) ---
+  // --- Critical Crafting Materials (필수 제작 재료) ---
+  "Mechanical Components": { name: "Mechanical Components", category: "material", usedForCrafting: true, defaultKeepMin: 50 },
+  "Metal Parts": { name: "Metal Parts", category: "material", usedForCrafting: true, defaultKeepMin: 100 },
+  "Rubber Parts": { name: "Rubber Parts", category: "material", usedForCrafting: true, defaultKeepMin: 50 },
+  "Fabric": { name: "Fabric", category: "material", usedForCrafting: true, defaultKeepMin: 50 },
+  "Electrical Components": { name: "Electrical Components", category: "material", usedForCrafting: true, defaultKeepMin: 50 },
+  "ARC Alloy": { name: "ARC Alloy", category: "material", usedForCrafting: true, defaultKeepMin: 20 },
+  "Advanced Mechanical Components": { name: "Advanced Mechanical Components", category: "material", usedForCrafting: true, defaultKeepMin: 20 },
+  "Laboratory Reagents": { name: "Laboratory Reagents", category: "material", usedForCrafting: true, defaultKeepMin: 20 },
+  "Queen Reactor": { name: "Queen Reactor", category: "material", usedForCrafting: true, defaultKeepMin: 1 },
+  "ARC Circuitry": { name: "ARC Circuitry", category: "material", usedForCrafting: true, defaultKeepMin: 10 },
+  "ARC Motion Core": { name: "ARC Motion Core", category: "material", usedForCrafting: true, defaultKeepMin: 10 },
+  "Heavy Gun Parts": { name: "Heavy Gun Parts", category: "material", usedForCrafting: true, defaultKeepMin: 10 },
+  "Light Gun Parts": { name: "Light Gun Parts", category: "material", usedForCrafting: true, defaultKeepMin: 10 },
+  "Medium Gun Parts": { name: "Medium Gun Parts", category: "material", usedForCrafting: true, defaultKeepMin: 10 },
+  "Complex Gun Parts": { name: "Complex Gun Parts", category: "material", usedForCrafting: true, defaultKeepMin: 10 },
+  
+  // --- Quest & Specific Materials (퀘스트용) ---
+  "Antiseptic": { name: "Antiseptic", category: "material", usedForQuests: true, defaultKeepMin: 10 },
+  "Canister": { name: "Canister", category: "material", usedForCrafting: true, defaultKeepMin: 20 },
+  "Chemicals": { name: "Chemicals", category: "material", usedForCrafting: true, defaultKeepMin: 20 },
+  "Explosive Compound": { name: "Explosive Compound", category: "material", usedForCrafting: true, defaultKeepMin: 20 },
+  "Fireball Burner": { name: "Fireball Burner", category: "material", usedForQuests: true, defaultKeepMin: 5 },
+  "Hornet Driver": { name: "Hornet Driver", category: "material", usedForQuests: true, defaultKeepMin: 5 },
+  "Leaper Pulse Unit": { name: "Leaper Pulse Unit", category: "material", usedForQuests: true, defaultKeepMin: 5 },
+  "Power Rod": { name: "Power Rod", category: "material", usedForQuests: true, defaultKeepMin: 10 },
+  "Rocketeer Driver": { name: "Rocketeer Driver", category: "material", usedForQuests: true, defaultKeepMin: 5 },
+  "Sentinel Firing Core": { name: "Sentinel Firing Core", category: "material", usedForQuests: true, defaultKeepMin: 5 },
+  "Snitch Scanner": { name: "Snitch Scanner", category: "material", usedForQuests: true, defaultKeepMin: 5 },
+  "Surveyor Vault": { name: "Surveyor Vault", category: "material", usedForQuests: true, defaultKeepMin: 3 },
+  "Tick Pod": { name: "Tick Pod", category: "material", usedForQuests: true, defaultKeepMin: 10 },
+  "Wasp Driver": { name: "Wasp Driver", category: "material", usedForQuests: true, defaultKeepMin: 5 },
+  "Water Pump": { name: "Water Pump", category: "material", usedForQuests: true, defaultKeepMin: 2 },
+  
+  // --- Consumables (소모품) ---
   "Adrenaline Shot": { name: "Adrenaline Shot", category: "consumable", defaultKeepMin: 5 },
-  "Agave Juice": { name: "Agave Juice", category: "consumable", defaultKeepMin: 10 },
+  "Agave Juice": { name: "Agave Juice", category: "consumable", defaultKeepMin: 5 },
   "Bandage": { name: "Bandage", category: "consumable", defaultKeepMin: 20 },
   "Herbal Bandage": { name: "Herbal Bandage", category: "consumable", defaultKeepMin: 10 },
   "Sterilized Bandage": { name: "Sterilized Bandage", category: "consumable", defaultKeepMin: 10 },
@@ -15,88 +49,58 @@ export const ITEMS_DB: Record<string, ItemMetadata> = {
   "Stimpack": { name: "Stimpack", category: "consumable", defaultKeepMin: 5 },
   "Vita Shot": { name: "Vita Shot", category: "consumable", defaultKeepMin: 5 },
   "Vita Spray": { name: "Vita Spray", category: "consumable", defaultKeepMin: 5 },
-  "Fruit Mix": { name: "Fruit Mix", category: "consumable", defaultKeepMin: 10 },
-  "Canned Food": { name: "Canned Food", category: "consumable", defaultKeepMin: 10 },
-  "Clean Water": { name: "Clean Water", category: "consumable", defaultKeepMin: 10 },
-
-  // --- Gadgets & Grenades (가젯 및 투척무기) ---
+  "Fruit Mix": { name: "Fruit Mix", category: "consumable", defaultKeepMin: 5 },
+  
+  // --- Grenades & Gadgets ---
   "Blaze Grenade": { name: "Blaze Grenade", category: "weapon", defaultKeepMin: 5 },
   "Gas Grenade": { name: "Gas Grenade", category: "weapon", defaultKeepMin: 5 },
   "Smoke Grenade": { name: "Smoke Grenade", category: "weapon", defaultKeepMin: 5 },
   "Lure Grenade": { name: "Lure Grenade", category: "weapon", defaultKeepMin: 5 },
   "Shock Grenade": { name: "Shock Grenade", category: "weapon", defaultKeepMin: 5 },
   "Explosive Mine": { name: "Explosive Mine", category: "weapon", defaultKeepMin: 5 },
-  "Gas Mine": { name: "Gas Mine", category: "weapon", defaultKeepMin: 5 },
-  "Jolt Mine": { name: "Jolt Mine", category: "weapon", defaultKeepMin: 5 },
-  "Pulse Mine": { name: "Pulse Mine", category: "weapon", defaultKeepMin: 5 },
-  "Light Stick": { name: "Light Stick", category: "misc", defaultKeepMin: 10 },
-  "Binoculars": { name: "Binoculars", category: "misc", defaultKeepMin: 1 },
-  "Zipline Tool": { name: "Zipline Tool", category: "misc", defaultKeepMin: 1 },
-
-  // --- Crafting Materials (일반 제작 재료) ---
-  "Scrap Metal": { name: "Scrap Metal", category: "material", usedForCrafting: true, defaultKeepMin: 100 },
-  "Plastic": { name: "Plastic", category: "material", usedForCrafting: true, defaultKeepMin: 50 },
-  "Rubber": { name: "Rubber", category: "material", usedForCrafting: true, defaultKeepMin: 40 },
-  "Glass": { name: "Glass", category: "material", usedForCrafting: true, defaultKeepMin: 30 },
-  "Fabric": { name: "Fabric", category: "material", usedForCrafting: true, defaultKeepMin: 50 },
-  "Wire": { name: "Wire", category: "material", usedForCrafting: true, defaultKeepMin: 50 },
-  "Canister": { name: "Canister", category: "material", usedForCrafting: true, defaultKeepMin: 20 },
-  "Chemicals": { name: "Chemicals", category: "material", usedForCrafting: true, defaultKeepMin: 20 },
-  "Explosive Compound": { name: "Explosive Compound", category: "material", usedForCrafting: true, defaultKeepMin: 20 },
-
-  // --- Advanced Components (고급 부품) ---
-  "Mechanical Component": { name: "Mechanical Component", category: "material", usedForCrafting: true, defaultKeepMin: 30 },
-  "Advanced Mechanical Component": { name: "Advanced Mechanical Component", category: "material", usedForCrafting: true, defaultKeepMin: 10 },
-  "Electrical Component": { name: "Electrical Component", category: "material", usedForCrafting: true, defaultKeepMin: 30 },
-  "Advanced Electrical Component": { name: "Advanced Electrical Component", category: "material", usedForCrafting: true, defaultKeepMin: 10 },
-  "Arc Alloy": { name: "Arc Alloy", category: "material", usedForCrafting: true, defaultKeepMin: 20 },
-  "Arc Circuitry": { name: "Arc Circuitry", category: "material", usedForCrafting: true, defaultKeepMin: 15 },
-  "Arc Motion Core": { name: "Arc Motion Core", category: "material", usedForCrafting: true, defaultKeepMin: 5 },
-  "Bastion Cell": { name: "Bastion Cell", category: "material", usedForCrafting: true, defaultKeepMin: 5 },
-  "Flow Controller": { name: "Flow Controller", category: "material", usedForCrafting: true, defaultKeepMin: 5 },
-  "Industrial Battery": { name: "Industrial Battery", category: "material", usedForCrafting: true, defaultKeepMin: 5 },
-  "Laboratory Reagents": { name: "Laboratory Reagents", category: "material", usedForCrafting: true, defaultKeepMin: 10 },
-  "Magnetic Accelerator": { name: "Magnetic Accelerator", category: "material", usedForCrafting: true, defaultKeepMin: 5 },
-  "Motor": { name: "Motor", category: "material", usedForCrafting: true, defaultKeepMin: 10 },
-  "Sensors": { name: "Sensors", category: "material", usedForCrafting: true, defaultKeepMin: 10 },
-  "Steel Spring": { name: "Steel Spring", category: "material", usedForCrafting: true, defaultKeepMin: 20 },
-
-  // --- Quest & Mob Drops (퀘스트 및 몹 드랍 재료) ---
-  // 주의: 몹 이름과 혼동하지 않도록 주의
-  "Hornet Driver": { name: "Hornet Driver", category: "material", usedForQuests: true, defaultKeepMin: 5 },
-  "Wasp Driver": { name: "Wasp Driver", category: "material", usedForQuests: true, defaultKeepMin: 5 },
-  "Rocketeer Driver": { name: "Rocketeer Driver", category: "material", usedForQuests: true, defaultKeepMin: 5 },
-  "Leaper Pulse Unit": { name: "Leaper Pulse Unit", category: "material", usedForQuests: true, defaultKeepMin: 5 },
-  "Surveyor Vault": { name: "Surveyor Vault", category: "material", usedForQuests: true, defaultKeepMin: 3 }, // 실제 아이템임
-  "Sentinel Firing Core": { name: "Sentinel Firing Core", category: "material", usedForQuests: true, defaultKeepMin: 3 },
-  "Tick Pod": { name: "Tick Pod", category: "material", usedForQuests: true, defaultKeepMin: 10 },
-  "Snitch Scanner": { name: "Snitch Scanner", category: "material", usedForQuests: true, defaultKeepMin: 5 },
-  "Antiseptic": { name: "Antiseptic", category: "material", usedForQuests: true, defaultKeepMin: 10 },
-  "Durable Cloth": { name: "Durable Cloth", category: "material", usedForQuests: true, defaultKeepMin: 20 },
-  "Fertilizer": { name: "Fertilizer", category: "material", usedForQuests: true, defaultKeepMin: 20 },
-  "Power Rod": { name: "Power Rod", category: "material", usedForQuests: true, defaultKeepMin: 10 },
-  "Water Pump": { name: "Water Pump", category: "material", usedForQuests: true, defaultKeepMin: 2 },
-
-  // --- Base/Scrappy Upgrades (희귀 재료) ---
+  
+  // --- Trash / Recyclables (잡동사니 - 기본적으로 Recycle 추천) ---
+  "Alarm Clock": { name: "Alarm Clock", category: "misc", defaultKeepMin: 0 },
+  "Bicycle Pump": { name: "Bicycle Pump", category: "misc", defaultKeepMin: 0 },
+  "Broken Flashlight": { name: "Broken Flashlight", category: "misc", defaultKeepMin: 0 },
+  "Broken Handheld Radio": { name: "Broken Handheld Radio", category: "misc", defaultKeepMin: 0 },
+  "Broken Taser": { name: "Broken Taser", category: "misc", defaultKeepMin: 0 },
+  "Candle Holder": { name: "Candle Holder", category: "misc", defaultKeepMin: 0 },
+  "Crumpled Plastic Bottle": { name: "Crumpled Plastic Bottle", category: "misc", defaultKeepMin: 0 },
+  "Deflated Football": { name: "Deflated Football", category: "misc", defaultKeepMin: 0 },
+  "Diving Goggles": { name: "Diving Goggles", category: "misc", defaultKeepMin: 0 },
+  "Duct Tape": { name: "Duct Tape", category: "misc", defaultKeepMin: 0 },
+  "Expired Respirator": { name: "Expired Respirator", category: "misc", defaultKeepMin: 0 },
+  "Frying Pan": { name: "Frying Pan", category: "misc", defaultKeepMin: 0 },
+  "Garlic Press": { name: "Garlic Press", category: "misc", defaultKeepMin: 0 },
+  "Geiger Counter": { name: "Geiger Counter", category: "misc", defaultKeepMin: 0 },
+  "Headphones": { name: "Headphones", category: "misc", defaultKeepMin: 0 },
+  "Ice Cream Scooper": { name: "Ice Cream Scooper", category: "misc", defaultKeepMin: 0 },
+  "Industrial Magnet": { name: "Industrial Magnet", category: "misc", defaultKeepMin: 0 },
+  "Microscope": { name: "Microscope", category: "misc", defaultKeepMin: 0 },
+  "Portable TV": { name: "Portable TV", category: "misc", defaultKeepMin: 0 },
+  "Remote Control": { name: "Remote Control", category: "misc", defaultKeepMin: 0 },
+  "Ripped Safety Vest": { name: "Ripped Safety Vest", category: "misc", defaultKeepMin: 0 },
+  "Rope": { name: "Rope", category: "misc", defaultKeepMin: 0 },
+  "Rubber Pad": { name: "Rubber Pad", category: "misc", defaultKeepMin: 0 },
+  "Ruined Accordion": { name: "Ruined Accordion", category: "misc", defaultKeepMin: 0 },
+  "Toaster": { name: "Toaster", category: "misc", defaultKeepMin: 0 },
+  
+  // --- Damaged/Impure Items (Recyclable) ---
+  "Damaged ARC Motion Core": { name: "Damaged ARC Motion Core", category: "misc", defaultKeepMin: 0 },
+  "Damaged ARC Powercell": { name: "Damaged ARC Powercell", category: "misc", defaultKeepMin: 0 },
+  "Impure ARC Coolant": { name: "Impure ARC Coolant", category: "misc", defaultKeepMin: 0 },
+  "Burned ARC Circuitry": { name: "Burned ARC Circuitry", category: "misc", defaultKeepMin: 0 },
+  
+  // --- Rare Upgrades (Scrappy/Base) ---
   "Apricot": { name: "Apricot", category: "misc", usedForWorkshop: true, defaultKeepMin: 5 },
-  "Lemon": { name: "Lemon", category: "misc", usedForWorkshop: true, defaultKeepMin: 5 },
-  "Mushroom": { name: "Mushroom", category: "misc", usedForWorkshop: true, defaultKeepMin: 10 },
-  "Olive": { name: "Olive", category: "misc", usedForWorkshop: true, defaultKeepMin: 10 },
-  "Prickly Pear": { name: "Prickly Pear", category: "misc", usedForWorkshop: true, defaultKeepMin: 10 },
   "Cat Bed": { name: "Cat Bed", category: "misc", usedForWorkshop: true, defaultKeepMin: 1 },
   "Dog Collar": { name: "Dog Collar", category: "misc", usedForWorkshop: true, defaultKeepMin: 1 },
+  "Lemon": { name: "Lemon", category: "misc", usedForWorkshop: true, defaultKeepMin: 5 },
+  "Mushroom": { name: "Mushroom", category: "misc", usedForWorkshop: true, defaultKeepMin: 5 },
+  "Olive": { name: "Olive", category: "misc", usedForWorkshop: true, defaultKeepMin: 5 },
+  "Prickly Pear": { name: "Prickly Pear", category: "misc", usedForWorkshop: true, defaultKeepMin: 5 },
   "Very Comfortable Pillow": { name: "Very Comfortable Pillow", category: "misc", usedForWorkshop: true, defaultKeepMin: 1 },
-  "Toaster": { name: "Toaster", category: "misc", usedForWorkshop: true, defaultKeepMin: 1 },
   "Light Bulb": { name: "Light Bulb", category: "misc", usedForWorkshop: true, defaultKeepMin: 5 },
   "Cooling Fan": { name: "Cooling Fan", category: "misc", usedForWorkshop: true, defaultKeepMin: 5 },
-  
-  // --- Ammo ---
-  "Standard Ammo": { name: "Standard Ammo", category: "ammo", defaultKeepMin: 500 },
-  "High-Caliber Ammo": { name: "High-Caliber Ammo", category: "ammo", defaultKeepMin: 200 },
-  "Compact Ammo": { name: "Compact Ammo", category: "ammo", defaultKeepMin: 300 },
-  "Energy Cell": { name: "Energy Cell", category: "ammo", defaultKeepMin: 100 },
-
-  // --- Valuables ---
-  "Old Currency": { name: "Old Currency", category: "misc", defaultKeepMin: 0 },
-  "Gold Watch": { name: "Gold Watch", category: "misc", defaultKeepMin: 0 },
 };
