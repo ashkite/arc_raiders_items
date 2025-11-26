@@ -93,7 +93,7 @@ export function useAiVision() {
       }
 
       // 2. 좌표대로 이미지를 자릅니다.
-      const itemImages = await cropItemSlots(file, blobs);
+      const itemImages = await cropItemSlots(file, blobs, 168); // 다운스케일로 속도 개선
 
       // 3. 각 조각 이미지를 워커(CLIP)에게 보냅니다.
       itemImages.forEach((imgUrl, idx) => {

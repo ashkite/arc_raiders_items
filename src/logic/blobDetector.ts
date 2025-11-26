@@ -140,7 +140,7 @@ export async function getItemSlots(file: File, threshold: number = 100): Promise
 }
 
 // 2단계: 좌표 기반으로 이미지 자르기
-export async function cropItemSlots(file: File, blobs: BoundingBox[]): Promise<string[]> {
+export async function cropItemSlots(file: File, blobs: BoundingBox[], targetSize?: number): Promise<string[]> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
@@ -150,9 +150,23 @@ export async function cropItemSlots(file: File, blobs: BoundingBox[]): Promise<s
 
       const itemImages: string[] = [];
       blobs.forEach(blob => {
-        canvas.width = blob.width;
-        canvas.height = blob.height;
-        ctx.drawImage(img, blob.x, blob.y, blob.width, blob.height, 0, 0, blob.width, blob.height);
+        if (targetSize && targetSize > 0) {
+          // 정사각형으로 리사이즈해 CLIP 처리 속도 절약
+          canvas.width = targetSize;
+          canvas.height = targetSize;
+          ctx.clearRect(0, 0, targetSize, targetSize);
+          const scale = Math.min(targetSize / blob.width, targetSize / blob.height);
+          const drawW = blob.width * scale;
+          const drawH = blob.height * scale;
+          const offsetX = (targetSize - drawW) / 2;
+          const offsetY = (targetSize - drawH) / 2;
+          ctx.drawImage(img, blob.x, blob.y, blob.width, blob.height, offsetX, offsetY, drawW, drawH);
+        } else {
+          canvas.width = blob.width;
+          canvas.height = blob.height;
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, blob.x, blob.y, blob.width, blob.height, 0, 0, blob.width, blob.height);
+        }
         itemImages.push(canvas.toDataURL('image/jpeg'));
       });
       resolve(itemImages);
