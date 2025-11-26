@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { ITEMS_DB } from '../data/items';
-import { detectItemSlots } from '../logic/blobDetector';
+import { getItemSlots, cropItemSlots } from '../logic/blobDetector';
 
 interface AnalysisResult {
   imageUrl: string;
@@ -65,33 +65,29 @@ export function useAiVision() {
     };
   }, []);
 
-  const analyzeImage = useCallback(async (file: File) => {
+  const analyzeImage = useCallback(async (file: File, threshold: number = 100) => {
     if (!workerRef.current) return;
     
     setStatus('analyzing');
     setResults([]); // 초기화
 
     try {
-      // 1. 이미지에서 아이템 슬롯(Blob)들을 잘라냅니다.
-      const itemImages = await detectItemSlots(file);
+      // 1. 이미지에서 아이템 슬롯(Blob) 좌표를 찾습니다.
+      const blobs = await getItemSlots(file, threshold);
       
-      if (itemImages.length === 0) {
+      if (blobs.length === 0) {
         console.warn("No items detected via blob detection.");
         setStatus('ready');
         return;
       }
+      
+      console.log(`Detected ${blobs.length} item slots with threshold ${threshold}. analyzing...`);
 
-      console.log(`Detected ${itemImages.length} item slots. analyzing...`);
+      // 2. 좌표대로 이미지를 자릅니다.
+      const itemImages = await cropItemSlots(file, blobs);
 
-      // 2. 각 조각 이미지를 워커(CLIP)에게 보냅니다.
+      // 3. 각 조각 이미지를 워커(CLIP)에게 보냅니다.
       itemImages.forEach((imgUrl, idx) => {
-        // 결과 매핑을 위해 임시 저장소를 쓸 수도 있지만, 
-        // 워커 메시지(id)를 인덱스로 써서 나중에 합치는 방식이 간단함.
-        // 하지만 여기서는 setResults에서 imgUrl을 참조할 수 없으므로, 
-        // 워커에게 imgUrl을 보냈다가 다시 돌려받거나(비효율적),
-        // 별도 상태로 관리해야 함.
-        // 가장 쉬운 방법: results 상태에 미리 placeholder를 만들어두고 채워넣기.
-        
         setResults(prev => [...prev, { imageUrl: imgUrl, topLabel: "Analyzing...", score: 0 }]);
 
         workerRef.current?.postMessage({
@@ -108,9 +104,5 @@ export function useAiVision() {
     }
   }, [labels]);
 
-  // 워커 메시지 핸들러 수정 필요: id(idx)를 이용해서 results 업데이트
-  // 하지만 useEffect 안이라서 itemImages에 접근 불가.
-  // 따라서, 위에서 setResults로 이미지를 미리 넣어두고, 여기서는 id(인덱스)로 찾아서 업데이트하는 방식 사용.
-  
   return { analyzeImage, status, progress, results };
 }

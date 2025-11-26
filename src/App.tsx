@@ -70,20 +70,18 @@ function App() {
 
     // ★ AI 비전 분석 시작 (이미지 자체를 분석)
     // 텍스트 창에 분석 중임을 표시
-    setText("🔄 AI가 이미지를 정밀 분석 중입니다...\n잠시만 기다려주세요. (약 5~10초)");
-    analyzeImage(selectedFile);
+    setText("🔄 AI가 이미지를 정밀 분석 중입니다...\n\n잠시만 기다려주세요.\n(처음 실행 시 모델 다운로드로 인해 10초 이상 소요될 수 있습니다)");
+    
+    // 기본 threshold 100으로 시작 (사용자가 나중에 조절 가능)
+    analyzeImage(selectedFile, 100);
   };
 
   const handleReanalyze = async (options: { threshold: number; invert: boolean }) => {
     if (!file) return;
 
-    const newPreviewUrl = await getPreview(file, options);
-    setPreviewUrl(newPreviewUrl);
-
-    const result = await processImage(file, options);
-    if (result) {
-      setText(result.rawText);
-    }
+    // 사용자가 슬라이더로 조절한 threshold로 AI 재분석 요청
+    setText(`🔄 재설정된 감도(${options.threshold})로 슬롯을 다시 찾고 있습니다...`);
+    analyzeImage(file, options.threshold);
   };
 
   // Cleanup object URL
