@@ -189,12 +189,23 @@ export function InventoryImageInput({ file, previewUrl, loading, progress, onFil
     onReanalyze({ threshold, invert, manualBlobs: detectedBlobs });
   };
 
+  const handleFullImageSelect = () => {
+    const img = imgRef.current;
+    if (!img) return;
+    setDetectedBlobs([{
+      x: 0,
+      y: 0,
+      width: img.naturalWidth,
+      height: img.naturalHeight
+    }]);
+  };
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-6 flex flex-col items-center gap-4 relative overflow-hidden">
-        {previewUrl ? (
-          <div className="relative w-full bg-neutral-950 flex justify-center rounded-md overflow-hidden border border-neutral-800 group">
-            <div className="relative max-h-80 w-full flex justify-center">
+            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-6 flex flex-col items-center gap-4 relative overflow-hidden">
+              {previewUrl ? (
+                <div className="relative w-full bg-neutral-950 flex justify-center rounded-md overflow-hidden border border-neutral-800 group">
+                  <div className="relative max-h-80 w-full flex justify-center">
                <img 
                 ref={imgRef}
                 src={previewUrl} 
@@ -255,6 +266,7 @@ export function InventoryImageInput({ file, previewUrl, loading, progress, onFil
                   <p>• <span className="text-amber-500 font-bold">드래그</span>: 누락된 아이템 박스 직접 그리기</p>
                   <p>• <span className="text-red-500 font-bold">우클릭</span>: 잘못된 박스 삭제</p>
                   <p>• <span className="text-neutral-300 font-bold">슬라이더</span>: 전체 감도 재설정 (초기화)</p>
+                  <p>• <span className="text-amber-400 font-bold">전체 영역</span>: 슬롯 자동 분할이 답답할 때 한 번에 분석</p>
                </div>
 
                <div className="space-y-2">
@@ -272,6 +284,13 @@ export function InventoryImageInput({ file, previewUrl, loading, progress, onFil
                     className="w-full h-2 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
                   />
                 </div>
+
+                <button
+                  onClick={handleFullImageSelect}
+                  className="w-full py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-100 rounded text-xs font-semibold border border-neutral-700 transition-colors"
+                >
+                  이미지 전체를 단일 영역으로 지정
+                </button>
 
                 <button 
                   onClick={handleAnalyzeClick}
