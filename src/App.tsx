@@ -19,7 +19,28 @@ function App() {
   const { processImage, getPreview, loading: ocrLoading, progress: ocrProgress, error: ocrError } = useOcr();
   
   // 신규 AI Vision (무거운 모델 로딩 및 정밀 분석용)
-  const { status: aiStatus, progress: aiProgress } = useAiVision();
+  const { analyzeImage, status: aiStatus, progress: aiProgress, results: aiResults } = useAiVision();
+
+  // AI 분석 결과가 나오면 텍스트 입력창에 반영
+  useEffect(() => {
+    if (aiResults && aiResults.length > 0) {
+      // AI가 찾은 아이템들을 "Item Name x1" 형식의 문자열로 변환
+      // 신뢰도(score)가 0.2 이상인 것만 필터링
+      const formattedText = aiResults
+        .filter(r => r.score > 0.2)
+        .map(r => `${r.topLabel} x1`) // 수량은 기본 1로 설정 (이미지 분류로는 수량 파악 불가)
+        .join('\n');
+      
+      if (formattedText) {
+        setText(prev => {
+          // 기존 텍스트가 있다면 구분선 추가해서 AI 결과 덧붙이기
+          // 또는, OCR 결과가 너무 쓰레기라면 아예 덮어쓰는 게 나을 수 있음
+          // 사용자 경험상 "깨진 글자"를 보는 것보다 "깔끔한 목록"을 보는 게 나으므로 덮어씁니다.
+          return `--- AI Visual Analysis ---\n${formattedText}`;
+        });
+      }
+    }
+  }, [aiResults]);
 
   // 텍스트가 변경되면 자동으로 "스마트 탐색" 및 분류 수행
   const classifiedItems = useMemo(() => {
@@ -35,11 +56,14 @@ function App() {
     setPreviewUrl(url);
 
     // 기본 설정으로 OCR 실행 (AI 모델이 준비되는 동안 빠른 결과 제공)
-    // 사용자는 AI 로딩 화면을 보고 있으므로, 이 과정이 "AI 분석"의 일부로 느껴짐
     const result = await processImage(selectedFile, { threshold: 160, invert: false });
     if (result) {
+      // OCR 결과는 임시로 보여줌
       setText(result.rawText);
     }
+
+    // ★ AI 비전 분석 시작 (이미지 자체를 분석)
+    analyzeImage(selectedFile);
   };
 
   const handleReanalyze = async (options: { threshold: number; invert: boolean }) => {
