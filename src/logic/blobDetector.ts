@@ -27,6 +27,8 @@ export async function detectItemSlots(file: File, threshold: number = 100): Prom
       const data = imageData.data;
       const width = canvas.width;
       const height = canvas.height;
+      
+      const getIdx = (x: number, y: number) => (y * width + x);
 
       // 1. 이진화 & Blob Detection (Auto-Tuning)
       // 슬롯을 충분히(예: 20개) 찾을 때까지 threshold를 낮추며 반복 시도
@@ -114,8 +116,8 @@ export async function detectItemSlots(file: File, threshold: number = 100): Prom
       // 그래도 너무 적으면 강제 그리드 분할 (Fallback)
       if (detectedBlobs.length < 12) {
          console.warn("Blob detection failed. Switching to Grid Fallback.");
-         // ... (기존 그리드 로직) ...
-         const cols = 5; // 좀 더 촘촘하게 5x5
+         // 5x5 그리드로 강제 분할
+         const cols = 5;
          const rows = 5;
          const cellW = img.width / cols;
          const cellH = img.height / rows;
@@ -137,8 +139,30 @@ export async function detectItemSlots(file: File, threshold: number = 100): Prom
       // 성능을 위해 최대 30개까지만 분석
       const validBlobs = detectedBlobs.slice(0, 30); 
 
-      // 3. 이미지 생성
+      // 3. 각 Blob 영역을 잘라낸(Crop) 이미지 URL 배열 생성
+      // 원본 이미지를 다시 그릴 캔버스
+      const cropCanvas = document.createElement('canvas');
+      const cropCtx = cropCanvas.getContext('2d');
+      
+      if (!cropCtx) { resolve([]); return; }
+
       const itemImages: string[] = [];
+      
+      validBlobs.forEach(blob => {
+        cropCanvas.width = blob.width;
+        cropCanvas.height = blob.height;
+        
+        cropCtx.drawImage(
+          img, 
+          blob.x, blob.y, blob.width, blob.height, 
+          0, 0, blob.width, blob.height
+        );
+        itemImages.push(cropCanvas.toDataURL('image/jpeg'));
+      });
+
+      resolve(itemImages);
+    }; // img.onload close
+
     img.onerror = reject;
     img.src = URL.createObjectURL(file);
   });
