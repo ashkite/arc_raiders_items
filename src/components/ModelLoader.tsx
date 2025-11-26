@@ -60,8 +60,8 @@ export function ModelLoader({ status, progress }: Props) {
             </div>
 
             <div className="h-12 bg-neutral-900/50 border border-amber-900/30 rounded p-2 font-mono text-xs text-amber-300/70 overflow-hidden flex flex-col justify-end">
-              <p>> {fileName}</p>
-              <p>> {isDownloading ? 'Allocating memory...' : 'Extracting features...'}{dots}</p>
+              <p>{'>'} {fileName}</p>
+              <p>{'>'} {isDownloading ? 'Allocating memory...' : 'Extracting features...'}{dots}</p>
             </div>
           </div>
         </div>
