@@ -24,18 +24,24 @@ function App() {
   // AI 분석 결과가 나오면 텍스트 입력창에 반영
   useEffect(() => {
     if (aiResults && aiResults.length > 0) {
-      // AI가 찾은 아이템들을 "Item Name x1" 형식의 문자열로 변환
-      // 신뢰도(score)가 0.2 이상인 것만 필터링
-      const formattedText = aiResults
-        .filter(r => r.score > 0.2)
-        .map(r => `${r.topLabel} x1`) // 수량은 기본 1로 설정 (이미지 분류로는 수량 파악 불가)
+      // 1. 신뢰도 필터링
+      const validResults = aiResults.filter(r => r.score > 0.2);
+
+      // 2. 같은 아이템 합치기 (Aggregation)
+      const itemCounts: Record<string, number> = {};
+      
+      validResults.forEach(r => {
+        const name = r.topLabel;
+        itemCounts[name] = (itemCounts[name] || 0) + 1;
+      });
+
+      // 3. 텍스트로 변환
+      const formattedText = Object.entries(itemCounts)
+        .map(([name, count]) => `${name} x${count}`)
         .join('\n');
       
       if (formattedText) {
         setText(prev => {
-          // 기존 텍스트가 있다면 구분선 추가해서 AI 결과 덧붙이기
-          // 또는, OCR 결과가 너무 쓰레기라면 아예 덮어쓰는 게 나을 수 있음
-          // 사용자 경험상 "깨진 글자"를 보는 것보다 "깔끔한 목록"을 보는 게 나으므로 덮어씁니다.
           return `--- AI Visual Analysis ---\n${formattedText}`;
         });
       }
