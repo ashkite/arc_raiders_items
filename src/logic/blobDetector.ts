@@ -28,100 +28,102 @@ export async function detectItemSlots(file: File, threshold: number = 100): Prom
       const width = canvas.width;
       const height = canvas.height;
 
-      // 1. 이진화 (Binarization) & 방문 배열 초기화
-      const visited = new Uint8Array(width * height); // 0: unvisited, 1: visited
-      const blobs: BoundingBox[] = [];
+      // 1. 이진화 & Blob Detection (Auto-Tuning)
+      // 슬롯을 충분히(예: 20개) 찾을 때까지 threshold를 낮추며 반복 시도
+      let detectedBlobs: BoundingBox[] = [];
+      let currentThreshold = threshold;
+      const minSlots = 20;
+      const maxRetries = 5;
 
-      const getIdx = (x: number, y: number) => (y * width + x);
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        const visited = new Uint8Array(width * height);
+        const blobs: BoundingBox[] = [];
 
-      // 2. Connected Components Labeling (단순화된 버전)
-      for (let y = 0; y < height; y += 4) { // 스킵하면서 스캔
-        for (let x = 0; x < width; x += 4) {
-          const idx = getIdx(x, y);
-          if (visited[idx]) continue;
+        for (let y = 0; y < height; y += 4) {
+          for (let x = 0; x < width; x += 4) {
+            const idx = getIdx(x, y);
+            if (visited[idx]) continue;
 
-          // 밝기 확인
-          const r = data[idx * 4];
-          const g = data[idx * 4 + 1];
-          const b = data[idx * 4 + 2];
-          const brightness = (r + g + b) / 3;
+            const r = data[idx * 4];
+            const g = data[idx * 4 + 1];
+            const b = data[idx * 4 + 2];
+            const brightness = (r + g + b) / 3;
 
-          if (brightness > threshold) {
-            // 새로운 Blob 발견! Flood Fill 시작
-            const stack = [[x, y]];
-            let minX = x, maxX = x, minY = y, maxY = y;
-            let pixelCount = 0;
-
-            while (stack.length > 0) {
-              const [cx, cy] = stack.pop()!;
-              const cIdx = getIdx(cx, cy);
+            if (brightness > currentThreshold) {
+              const stack = [[x, y]];
+              let minX = x, maxX = x, minY = y, maxY = y;
               
-              if (visited[cIdx]) continue;
-              visited[cIdx] = 1;
-              pixelCount++;
+              while (stack.length > 0) {
+                const [cx, cy] = stack.pop()!;
+                const cIdx = getIdx(cx, cy);
+                
+                if (visited[cIdx]) continue;
+                visited[cIdx] = 1;
 
-              minX = Math.min(minX, cx);
-              maxX = Math.max(maxX, cx);
-              minY = Math.min(minY, cy);
-              maxY = Math.max(maxY, cy);
+                minX = Math.min(minX, cx);
+                maxX = Math.max(maxX, cx);
+                minY = Math.min(minY, cy);
+                maxY = Math.max(maxY, cy);
 
-              // 4방향 탐색
-              const neighbors = [[cx+1, cy], [cx-1, cy], [cx, cy+1], [cx, cy-1]];
-              for (const [nx, ny] of neighbors) {
-                if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                  const nIdx = getIdx(nx, ny);
-                  if (!visited[nIdx]) {
-                    const nr = data[nIdx * 4];
-                    const ng = data[nIdx * 4 + 1];
-                    const nb = data[nIdx * 4 + 2];
-                    const nbright = (nr + ng + nb) / 3;
-                    // 비슷한 밝기면 같은 덩어리로 간주
-                    if (nbright > threshold * 0.8) {
-                      stack.push([nx, ny]);
+                const neighbors = [[cx+2, cy], [cx-2, cy], [cx, cy+2], [cx, cy-2]];
+                for (const [nx, ny] of neighbors) {
+                  if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                    const nIdx = getIdx(nx, ny);
+                    if (!visited[nIdx]) {
+                      const nr = data[nIdx * 4];
+                      const ng = data[nIdx * 4 + 1];
+                      const nb = data[nIdx * 4 + 2];
+                      const nbright = (nr + ng + nb) / 3;
+                      if (nbright > currentThreshold * 0.8) {
+                        stack.push([nx, ny]);
+                      }
                     }
                   }
                 }
               }
-            }
 
-            // Blob 유효성 검사 (너무 작거나 너무 큰 것은 제외)
-            const w = maxX - minX;
-            const h = maxY - minY;
-            if (w > 20 && h > 20 && w < width / 2 && h < height / 2) {
-              // 원본 스케일로 복구
-              blobs.push({
-                x: minX / scale,
-                y: minY / scale,
-                width: w / scale,
-                height: h / scale
-              });
+              const w = maxX - minX;
+              const h = maxY - minY;
+              // 너무 작거나(노이즈) 너무 큰(배경) 것 제외
+              // 게임 아이콘은 대략 정사각형에 가까움
+              if (w > 15 && h > 15 && w < width / 3 && h < height / 3) {
+                blobs.push({
+                  x: minX / scale,
+                  y: minY / scale,
+                  width: w / scale,
+                  height: h / scale
+                });
+              }
             }
           }
         }
+
+        // 충분히 찾았으면 중단
+        if (blobs.length >= minSlots) {
+          detectedBlobs = blobs;
+          console.log(`Attempt ${attempt+1}: Found ${blobs.length} slots with threshold ${currentThreshold}`);
+          break;
+        } else {
+          console.log(`Attempt ${attempt+1}: Found only ${blobs.length} slots. Lowering threshold...`);
+          detectedBlobs = blobs; // 일단 저장
+          currentThreshold -= 20; // 임계값 낮춤 (더 어두운 것도 잡도록)
+          if (currentThreshold < 20) break;
+        }
       }
-
-      // 3. 각 Blob 영역을 잘라낸(Crop) 이미지 URL 배열 생성
-      // 원본 이미지를 다시 그릴 캔버스
-      const cropCanvas = document.createElement('canvas');
-      const cropCtx = cropCanvas.getContext('2d');
       
-      if (!cropCtx) { resolve([]); return; }
-
-      const itemImages: string[] = [];
-      
-      // Blob 감지 결과가 없거나 너무 적으면, 강제로 그리드로 자릅니다 (Fallback)
-      let finalBlobs = blobs;
-      if (blobs.length < 3) {
-         // 4x4 그리드로 강제 분할
-         const cols = 4;
-         const rows = 4;
+      // 그래도 너무 적으면 강제 그리드 분할 (Fallback)
+      if (detectedBlobs.length < 12) {
+         console.warn("Blob detection failed. Switching to Grid Fallback.");
+         // ... (기존 그리드 로직) ...
+         const cols = 5; // 좀 더 촘촘하게 5x5
+         const rows = 5;
          const cellW = img.width / cols;
          const cellH = img.height / rows;
          
-         finalBlobs = [];
+         detectedBlobs = [];
          for(let r=0; r<rows; r++) {
             for(let c=0; c<cols; c++) {
-               finalBlobs.push({
+               detectedBlobs.push({
                   x: c * cellW,
                   y: r * cellH,
                   width: cellW,
@@ -131,30 +133,12 @@ export async function detectItemSlots(file: File, threshold: number = 100): Prom
          }
       }
 
-      // 너무 많은 Blob은 성능 저하 -> 상위 16개만 테스트
-      const validBlobs = finalBlobs.slice(0, 16); 
+      // NMS(Non-Maximum Suppression) 비슷한 걸로 겹치는 박스 제거하면 좋지만 일단 생략
+      // 성능을 위해 최대 30개까지만 분석
+      const validBlobs = detectedBlobs.slice(0, 30); 
 
-      validBlobs.forEach(blob => {
-        cropCanvas.width = blob.width;
-        cropCanvas.height = blob.height;
-        
-        // 원본 이미지에서 해당 영역만 그리기 (스케일 복구 불필요, 위에서 원본 크기 기준 계산함? 아님. 위에는 scale 적용된 좌표임.)
-        // 주의: 위 Fallback 로직은 원본 좌표계. Blob 로직은 scale 좌표계.
-        // 따라서 Blob 좌표를 원본으로 변환해야 함.
-        
-        // 기존 blob 로직은 이미 scale로 나눴음(원본 좌표계). Fallback도 원본 좌표계.
-        // OK.
-        
-        cropCtx.drawImage(
-          img, 
-          blob.x, blob.y, blob.width, blob.height, 
-          0, 0, blob.width, blob.height
-        );
-        itemImages.push(cropCanvas.toDataURL('image/jpeg'));
-      });
-
-      resolve(itemImages);
-    };
+      // 3. 이미지 생성
+      const itemImages: string[] = [];
     img.onerror = reject;
     img.src = URL.createObjectURL(file);
   });

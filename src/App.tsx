@@ -137,6 +137,34 @@ function App() {
               text={text} 
               onChange={setText} 
             />
+
+            {/* AI 분석 상세 결과 (디버그 뷰) */}
+            {aiResults.length > 0 && (
+              <div className="mt-4 border-t border-neutral-800 pt-4">
+                <h3 className="text-sm font-medium text-neutral-400 mb-2">AI Vision Analysis ({aiResults.length} slots)</h3>
+                <div className="grid grid-cols-3 gap-2 max-h-60 overflow-y-auto pr-2">
+                  {aiResults.map((res, idx) => (
+                    <div key={idx} className="bg-neutral-900 border border-neutral-800 rounded p-2 flex flex-col gap-1">
+                      <div className="aspect-square bg-black rounded overflow-hidden flex items-center justify-center">
+                        {res.imageUrl ? (
+                          <img src={res.imageUrl} alt="Slot" className="w-full h-full object-contain" />
+                        ) : (
+                          <div className="w-4 h-4 rounded-full bg-neutral-800 animate-pulse" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-neutral-300 truncate" title={res.topLabel}>
+                          {res.topLabel}
+                        </p>
+                        <p className="text-[10px] text-neutral-500">
+                          {(res.score * 100).toFixed(0)}% confidence
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
         </div>
 
