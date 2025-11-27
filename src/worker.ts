@@ -2,9 +2,10 @@ import { pipeline, env } from '@xenova/transformers';
 import { ITEMS } from './data/items';
 
 // Configure Transformers.js to use local models
+// Path: /public/models/Xenova/clip-vit-base-patch32/
 env.allowLocalModels = true;
 env.allowRemoteModels = false;
-env.localModelPath = '/models/';
+env.localModelPath = '/models/'; 
 
 class VisionPipeline {
   static instance: any = null;
@@ -13,10 +14,8 @@ class VisionPipeline {
     if (!this.instance) {
       console.log('Loading CLIP model from local resources...');
       
-      // Transformers.js will look for:
-      // /models/clip-vit-base-patch32/config.json
-      // /models/clip-vit-base-patch32/onnx/model_quantized.onnx (if quantized: true)
-      this.instance = await pipeline('zero-shot-image-classification', 'clip-vit-base-patch32', {
+      // 이 모델 이름이 '/models/' + 'Xenova/clip-vit-base-patch32' 경로와 매핑됨
+      this.instance = await pipeline('zero-shot-image-classification', 'Xenova/clip-vit-base-patch32', {
           quantized: true,
       });
     }
