@@ -507,3 +507,5 @@ Object.entries(ITEM_OVERRIDES).forEach(([name, override]) => {
   }
   ITEMS_DB[name] = { ...ITEMS_DB[name], ...override };
 });
+
+export const ITEMS = Object.values(ITEMS_DB);

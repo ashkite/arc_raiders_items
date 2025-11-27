@@ -26,3 +26,10 @@ export type OcrResult = {
   rawText: string;
   lines: string[];
 };
+
+export interface ItemResult {
+  id: string;
+  name: string;
+  confidence: number;
+  details?: string;
+}
