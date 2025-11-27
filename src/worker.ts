@@ -1,15 +1,23 @@
 import { pipeline, env } from '@xenova/transformers';
 import { ITEMS } from './data/items';
 
-env.allowLocalModels = false;
+// Configure Transformers.js to use local models from /public/models/
+env.allowLocalModels = true;
+env.allowRemoteModels = false;
+env.localModelPath = '/models/';
 
 class VisionPipeline {
   static instance: any = null;
 
   static async getInstance() {
     if (!this.instance) {
-      console.log('Loading CLIP model...');
-      this.instance = await pipeline('zero-shot-image-classification', 'Xenova/clip-vit-base-patch32');
+      console.log('Loading CLIP model from local resources...');
+      
+      // The model name must match the folder name in public/models/
+      // i.e. public/models/clip-vit-base-patch32
+      this.instance = await pipeline('zero-shot-image-classification', 'clip-vit-base-patch32', {
+          quantized: true, // This will look for 'model_quantized.onnx'
+      });
     }
     return this.instance;
   }
