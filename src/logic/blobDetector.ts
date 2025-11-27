@@ -32,12 +32,13 @@ class UnionFind {
 
 export function findItemBlobs(imageData: ImageData, threshold: number = 50): Rect[] {
   const { width, height, data } = imageData;
-  const TILE_SIZE = 10;
+  
+  // FINE-GRAINED TILE: 5px instead of 10px to separate close items
+  const TILE_SIZE = 5;
   const COLS = Math.ceil(width / TILE_SIZE);
   const ROWS = Math.ceil(height / TILE_SIZE);
   
-  // 1. Tile Analysis: Mark tiles that have enough activity (edges/variance)
-  // Using Uint8Array: 0 = inactive, 1 = active
+  // 1. Tile Analysis
   const activeTiles = new Uint8Array(COLS * ROWS);
   
   for (let y = 0; y < ROWS; y++) {
@@ -49,8 +50,8 @@ export function findItemBlobs(imageData: ImageData, threshold: number = 50): Rec
       const endX = Math.min(startX + TILE_SIZE, width);
       const endY = Math.min(startY + TILE_SIZE, height);
       
-      for (let py = startY; py < endY; py += 2) { 
-        for (let px = startX; px < endX; px += 2) {
+      for (let py = startY; py < endY; py++) { 
+        for (let px = startX; px < endX; px++) {
           const idx = (py * width + px) * 4;
           const brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
           if (brightness < minVal) minVal = brightness;
@@ -64,8 +65,8 @@ export function findItemBlobs(imageData: ImageData, threshold: number = 50): Rec
     }
   }
 
-  // 1.5. Morphological Closing (Dilation) - Fill gaps and connect nearby parts
-  // We copy the array to avoid cascading updates affecting the current pass
+  // 1.5. Morphological Closing (Dilation)
+  // Connects internal gaps but radius is now small (5px)
   const dilatedTiles = new Uint8Array(activeTiles);
   
   for (let y = 0; y < ROWS; y++) {
@@ -73,7 +74,6 @@ export function findItemBlobs(imageData: ImageData, threshold: number = 50): Rec
       const idx = y * COLS + x;
       if (activeTiles[idx] === 0) continue;
 
-      // If current tile is active, activate its 8 neighbors
       for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
           if (dx === 0 && dy === 0) continue;
@@ -87,7 +87,7 @@ export function findItemBlobs(imageData: ImageData, threshold: number = 50): Rec
     }
   }
 
-  // 2. Connected Components (Union-Find) on the DILATED grid
+  // 2. Connected Components
   const uf = new UnionFind(COLS * ROWS);
   
   for (let y = 0; y < ROWS; y++) {
@@ -104,7 +104,7 @@ export function findItemBlobs(imageData: ImageData, threshold: number = 50): Rec
     }
   }
 
-  // 3. Group into bounding boxes
+  // 3. Group
   const groups = new Map<number, { minX: number, minY: number, maxX: number, maxY: number }>();
   
   for (let y = 0; y < ROWS; y++) {
@@ -126,7 +126,7 @@ export function findItemBlobs(imageData: ImageData, threshold: number = 50): Rec
     }
   }
 
-  // 4. Convert back to pixel coordinates
+  // 4. Convert
   let rawRects: Rect[] = [];
   
   groups.forEach(g => {
@@ -135,17 +135,18 @@ export function findItemBlobs(imageData: ImageData, threshold: number = 50): Rec
     const w = (g.maxX - g.minX + 1) * TILE_SIZE;
     const h = (g.maxY - g.minY + 1) * TILE_SIZE;
     
-    // Basic noise filter
+    // Filter tiny noise (must be > 20x20 px)
     if (w >= 20 && h >= 20) {
        rawRects.push({ x, y, width: w, height: h });
     }
   });
 
-  // 5. Merge Overlapping/Nearby Boxes (Iterative)
-  // If two boxes are close, merge them.
-  // Repeat until no changes.
+  // 5. Merge
+  // Use a strictly touching logic. 
+  // Reduce MERGE_DIST significantly to avoid merging neighbors.
+  // 0 means "must touch or overlap".
   let changed = true;
-  const MERGE_DIST = TILE_SIZE * 2; // Merge if within 20px
+  const MERGE_DIST = 0; 
 
   while (changed) {
     changed = false;
@@ -158,13 +159,11 @@ export function findItemBlobs(imageData: ImageData, threshold: number = 50): Rec
       let current = { ...rawRects[i] };
       used[i] = true;
       
-      // Try to merge with any other unused rect
       for (let j = i + 1; j < rawRects.length; j++) {
         if (used[j]) continue;
         
         const other = rawRects[j];
         
-        // Check intersection or proximity
         const isClose = !(
           current.x > other.x + other.width + MERGE_DIST ||
           other.x > current.x + current.width + MERGE_DIST ||
@@ -173,7 +172,6 @@ export function findItemBlobs(imageData: ImageData, threshold: number = 50): Rec
         );
         
         if (isClose) {
-          // Merge
           const minX = Math.min(current.x, other.x);
           const minY = Math.min(current.y, other.y);
           const maxX = Math.max(current.x + current.width, other.x + other.width);
@@ -187,7 +185,7 @@ export function findItemBlobs(imageData: ImageData, threshold: number = 50): Rec
           };
           
           used[j] = true;
-          changed = true; // We made a change, need another pass
+          changed = true;
         }
       }
       merged.push(current);
