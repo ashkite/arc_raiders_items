@@ -1,117 +1,121 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BoundingBox, getItemSlots, cropItemSlots } from '../logic/blobDetector';
-import { ITEMS_DB } from '../data/items';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { ITEMS } from '../data/items';
 
 interface AnalysisResult {
-  imageUrl: string;
-  topLabel: string;
+  label: string;
   score: number;
-  candidates?: { label: string; score: number }[];
 }
 
-export function useAiVision() {
-  // ... (state definitions)
-  const [status, setStatus] = useState<'idle' | 'loading_model' | 'ready' | 'analyzing' | 'error'>('idle');
-  const [progress, setProgress] = useState<{ file: string; progress: number; status: string } | null>(null);
-  const [results, setResults] = useState<AnalysisResult[]>([]);
-  const workerRef = useRef<Worker | null>(null);
+// Levenshtein Distance Helper
+function levenshteinDistance(a: string, b: string): number {
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= a.length; j++) {
+    matrix[0][j] = j;
+  }
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1, // substitution
+          Math.min(
+            matrix[i][j - 1] + 1, // insertion
+            matrix[i - 1][j] + 1 // deletion
+          )
+        );
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+}
 
-  const labels = useMemo(() => Object.keys(ITEMS_DB), []);
+export const useAiVision = () => {
+  const [worker, setWorker] = useState<Worker | null>(null);
+  const [isReady, setIsReady] = useState(false);
+  const pendingPromises = useRef<Map<string, (result: any) => void>>(new Map());
 
-  // ... (useEffect worker setup)
   useEffect(() => {
-    const worker = new Worker(new URL('../worker.ts', import.meta.url), {
-      type: 'module'
+    const w = new Worker(new URL('../worker.ts', import.meta.url), {
+      type: 'module',
     });
 
-    workerRef.current = worker;
-
-    worker.onmessage = (e) => {
-      const { type, data, result, id } = e.data;
-
-      if (type === 'progress') {
-        setStatus('loading_model');
-        setProgress(data);
-      } else if (type === 'ready') {
-        setStatus('ready');
-        setProgress(null);
-      } else if (type === 'result') {
-        if (Array.isArray(result) && result.length > 0) {
-          const topMatch = result[0];
-          setResults(prev => {
-            const newResults = [...prev];
-            if (newResults[id]) {
-              newResults[id] = {
-                ...newResults[id],
-                topLabel: topMatch.label,
-                score: topMatch.score,
-                candidates: result
-              };
-            }
-            return newResults;
-          });
+    w.onmessage = (e) => {
+      const { id, status, result, error } = e.data;
+      const resolver = pendingPromises.current.get(id);
+      
+      if (resolver) {
+        if (status === 'success') {
+          resolver(result);
+        } else {
+          console.error(error);
+          resolver(null);
         }
-        setStatus('ready');
-      } else if (type === 'error') {
-        console.error("AI Worker Error:", e.data.error);
-        setStatus('error');
+        pendingPromises.current.delete(id);
       }
     };
 
-    worker.postMessage({ type: 'load' });
+    setWorker(w);
+    setIsReady(true);
 
-    return () => {
-      worker.terminate();
-    };
+    return () => w.terminate();
   }, []);
 
-  // analyzeImage 수정: threshold 또는 manualBlobs를 받음
-  const analyzeImage = useCallback(async (file: File, options?: { threshold?: number, manualBlobs?: BoundingBox[] }) => {
-    if (!workerRef.current) return;
+  const analyzeImage = useCallback(async (
+    imageBlob: Blob, 
+    hintText: string = ''
+  ): Promise<AnalysisResult | null> => {
+    if (!worker || !isReady) return null;
+
+    const id = Math.random().toString(36).substring(7);
+    const imageUrl = URL.createObjectURL(imageBlob);
+
+    // --- Candidate Filtering Logic ---
+    let candidateLabels: string[] = [];
     
-    setStatus('analyzing');
-    setResults([]); // 초기화
-
-    try {
-      let blobs: BoundingBox[] = [];
-
-      if (options?.manualBlobs && options.manualBlobs.length > 0) {
-        // 수동 박스가 있으면 그것만 사용
-        blobs = options.manualBlobs;
-        console.log(`Using ${blobs.length} manual slots.`);
-      } else {
-        // 없으면 자동 감지
-        const threshold = options?.threshold ?? 100;
-        blobs = await getItemSlots(file, threshold);
-        console.log(`Detected ${blobs.length} item slots (Auto, threshold ${threshold}).`);
-      }
+    if (hintText && hintText.length > 2) {
+      const cleanHint = hintText.toLowerCase().trim();
       
-      if (blobs.length === 0) {
-        console.warn("No items detected.");
-        setStatus('ready');
-        return;
-      }
-
-      // 2. 좌표대로 이미지를 자릅니다.
-      const itemImages = await cropItemSlots(file, blobs, 128); // 더 작게 리사이즈해 속도 개선
-
-      // 3. 각 조각 이미지를 워커(CLIP)에게 보냅니다.
-      itemImages.forEach((imgUrl, idx) => {
-        setResults(prev => [...prev, { imageUrl: imgUrl, topLabel: "Analyzing...", score: 0 }]);
-
-        workerRef.current?.postMessage({
-          type: 'analyze',
-          image: imgUrl,
-          labels: labels,
-          id: idx
-        });
+      // Calculate similarity for all items
+      const scoredItems = ITEMS.map(item => {
+        const dist = levenshteinDistance(cleanHint, item.name.toLowerCase());
+        // Normalize score: lower distance is better. 
+        // Simple heuristic: match if distance is small relative to string length
+        return { name: item.name, dist };
       });
 
-    } catch (err) {
-      console.error("Vision Analysis Failed:", err);
-      setStatus('error');
-    }
-  }, [labels]);
+      // Sort by distance (ascending)
+      scoredItems.sort((a, b) => a.dist - b.dist);
 
-  return { analyzeImage, status, progress, results };
-}
+      // Strategy:
+      // 1. Exact/Near Match: If dist <= 2, trust it highly.
+      // 2. Ambiguous: Take top 10 closest matches.
+      // 3. No Match: If all distances are high, fallback to full list (empty array)
+      
+      if (scoredItems[0].dist <= 2) {
+        // Very strong match, limit to top 3 to verify
+        candidateLabels = scoredItems.slice(0, 3).map(i => i.name);
+      } else {
+        // Fuzzy match, try top 10
+        candidateLabels = scoredItems.slice(0, 10).map(i => i.name);
+      }
+      
+      console.log(`[Optimization] OCR Hint: "${hintText}" -> Candidates:`, candidateLabels);
+    }
+    // -------------------------------
+
+    return new Promise((resolve) => {
+      pendingPromises.current.set(id, resolve);
+      worker.postMessage({ 
+        id, 
+        image: imageUrl,
+        candidateLabels // Pass filtered list to worker
+      });
+    });
+  }, [worker, isReady]);
+
+  return { analyzeImage, isReady };
+};

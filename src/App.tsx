@@ -1,194 +1,148 @@
-import { useState, useEffect, useMemo } from 'react';
-import { ChevronRight } from 'lucide-react';
-import { Layout } from './components/Layout';
+import { useState, useCallback } from 'react';
+import './App.css';
+import { createWorker, RecognizeResult } from 'tesseract.js';
 import { InventoryImageInput } from './components/InventoryImageInput';
-import { InventoryTextInput } from './components/InventoryTextInput';
+import { ModelLoader } from './components/ModelLoader';
 import { ResultTable } from './components/ResultTable';
-import { ModelLoader } from './components/ModelLoader'; // 로더 추가
-import { useOcr } from './hooks/useOcr';
-import { useAiVision } from './hooks/useAiVision'; // AI 훅 추가
-import { classifyItems } from './logic/classify';
-import { findKnownItems } from './logic/findItems';
-import { BoundingBox } from './logic/blobDetector';
+import { useAiVision } from './hooks/useAiVision';
+import { findItemBlobs } from './logic/blobDetector';
+import { ItemResult } from './types';
 
 function App() {
-  const [file, setFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [text, setText] = useState<string>("");
+  const [status, setStatus] = useState('Idle');
+  const [results, setResults] = useState<ItemResult[]>([]);
+  const [progress, setProgress] = useState(0);
   
-  // 기존 OCR (빠른 분석용)
-  const { processImage, loading: ocrLoading, progress: ocrProgress, error: ocrError } = useOcr();
-  
-  // 신규 AI Vision (무거운 모델 로딩 및 정밀 분석용)
-  const { analyzeImage, status: aiStatus, progress: aiProgress, results: aiResults } = useAiVision();
+  const { analyzeImage, isReady: isVisionReady } = useAiVision();
 
-  // AI 분석 결과가 나오면 텍스트 입력창에 반영
-  useEffect(() => {
-    if (aiResults && aiResults.length > 0) {
-      // 1. 신뢰도 필터링
-      const validResults = aiResults.filter(r => r.score > 0.2);
-
-      // 2. 같은 아이템 합치기 (Aggregation)
-      const itemCounts: Record<string, number> = {};
-      
-      validResults.forEach(r => {
-        const name = r.topLabel;
-        itemCounts[name] = (itemCounts[name] || 0) + 1;
-      });
-
-      // 3. 텍스트로 변환
-      const formattedText = Object.entries(itemCounts)
-        .map(([name, count]) => `${name} x${count}`)
-        .join('\n');
-      
-      if (formattedText) {
-        setText(`--- AI Visual Analysis ---\n${formattedText}`);
-      }
+  // Global OCR Helper
+  const runGlobalOcr = async (imageUrl: string): Promise<RecognizeResult | null> => {
+    setStatus('Running Global OCR...');
+    try {
+      const worker = await createWorker('eng');
+      const ret = await worker.recognize(imageUrl);
+      await worker.terminate();
+      return ret;
+    } catch (e) {
+      console.error("OCR Failed", e);
+      return null;
     }
-  }, [aiResults]);
+  };
 
-  // 텍스트가 변경되면 자동으로 "스마트 탐색" 및 분류 수행
-  const classifiedItems = useMemo(() => {
-    const rawItems = findKnownItems(text);
-    return classifyItems(rawItems);
-  }, [text]);
+  const handleFileSelect = useCallback(async (file: File) => {
+    if (!isVisionReady) {
+      alert('AI Model is still loading. Please wait.');
+      return;
+    }
 
-  const handleFileSelect = async (selectedFile: File) => {
-    setFile(selectedFile);
+    setResults([]);
+    setProgress(0);
     
-    // 원본 프리뷰 생성
-    const url = URL.createObjectURL(selectedFile);
-    setPreviewUrl(url);
+    const imageUrl = URL.createObjectURL(file);
+    const img = new Image();
+    
+    img.onload = async () => {
+      // 1. Run Global OCR to get text context
+      const ocrResult = await runGlobalOcr(imageUrl);
+      const ocrWords = ocrResult?.data.words || [];
 
-    // 기본 설정으로 OCR 실행 (AI 모델이 준비되는 동안 빠른 결과 제공)
-    const result = await processImage(selectedFile, { threshold: 160, invert: false });
-    if (result) {
-      // OCR 결과는 임시로 보여줌
-      setText(result.rawText);
-    }
-
-    // ★ AI 비전 분석 시작 (이미지 자체를 분석)
-    // 텍스트 창에 분석 중임을 표시
-    setText("🔄 AI가 이미지를 정밀 분석 중입니다...\n\n잠시만 기다려주세요.\n(처음 실행 시 모델 다운로드로 인해 10초 이상 소요될 수 있습니다)");
-
-    // 기본 threshold 100으로 시작 (사용자가 나중에 조절 가능)
-    analyzeImage(selectedFile, { threshold: 100 });
-  };
-
-  const handleReanalyze = async (options: { threshold: number; invert: boolean; manualBlobs?: BoundingBox[] }) => {
-    if (!file) return;
-
-    if (options.manualBlobs && options.manualBlobs.length > 0) {
-       setText(`🔄 사용자가 지정한 ${options.manualBlobs.length}개 영역을 정밀 분석 중입니다...`);
-       analyzeImage(file, { manualBlobs: options.manualBlobs });
-    } else {
-       // 슬라이더 조절 시
-       setText(`🔄 재설정된 감도(${options.threshold})로 슬롯을 다시 찾고 있습니다...`);
-       analyzeImage(file, { threshold: options.threshold });
-    }
-  };
-
-  // Cleanup object URL
-  useEffect(() => {
-    return () => {
-      if (previewUrl && !previewUrl.startsWith('data:')) {
-         URL.revokeObjectURL(previewUrl);
+      setStatus('Detecting Inventory Grid...');
+      
+      // Create canvas to extract pixel data for blob detector
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0);
+      
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      
+      // 2. Detect Grid Slots (Blobs)
+      const blobs = findItemBlobs(imageData);
+      
+      if (blobs.length === 0) {
+        setStatus('No items detected. Try a clearer image.');
+        return;
       }
+
+      setStatus(`Found ${blobs.length} slots. Analyzing...`);
+      
+      const newResults: ItemResult[] = [];
+      let processedCount = 0;
+
+      // 3. Hybrid Analysis Loop
+      for (const blob of blobs) {
+        // A. Crop the slot
+        const itemCanvas = document.createElement('canvas');
+        itemCanvas.width = blob.width;
+        itemCanvas.height = blob.height;
+        const itemCtx = itemCanvas.getContext('2d')!;
+        itemCtx.drawImage(
+          canvas, 
+          blob.x, blob.y, blob.width, blob.height,
+          0, 0, blob.width, blob.height
+        );
+
+        // B. Find OCR Hint for this slot
+        // Check which OCR words fall inside this blob's bounding box
+        const matchedWords = ocrWords.filter(w => {
+          const wx = (w.bbox.x0 + w.bbox.x1) / 2;
+          const wy = (w.bbox.y0 + w.bbox.y1) / 2;
+          return (
+            wx >= blob.x && wx <= blob.x + blob.width &&
+            wy >= blob.y && wy <= blob.y + blob.height
+          );
+        });
+        
+        const hintText = matchedWords.map(w => w.text).join(' ');
+
+        // C. Convert to Blob for AI
+        const blobData = await new Promise<Blob | null>(resolve => itemCanvas.toBlob(resolve));
+        
+        if (blobData) {
+          // D. Run AI with OCR Hint
+          const visionResult = await analyzeImage(blobData, hintText);
+          
+          if (visionResult) {
+            newResults.push({
+              id: Math.random().toString(),
+              name: visionResult.label,
+              confidence: visionResult.score,
+              // Visual debug: Add detected text
+              details: hintText ? `OCR Hint: "${hintText}"` : 'Pure Vision'
+            });
+          }
+        }
+
+        processedCount++;
+        setProgress((processedCount / blobs.length) * 100);
+        // Update UI iteratively (optional, doing it in batch here for performance)
+      }
+
+      setResults(newResults);
+      setStatus('Analysis Complete');
     };
-  }, [previewUrl]);
+
+    img.src = imageUrl;
+  }, [isVisionReady, analyzeImage]);
 
   return (
-    <Layout>
-      {/* AI 모델 로딩 스크린 */}
-      <ModelLoader status={aiStatus} progress={aiProgress} />
+    <div className="app-container">
+      <h1>ARC Raiders Inventory Sorter (Hybrid AI)</h1>
+      
+      {!isVisionReady && <ModelLoader />}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        
-        {/* Left Column: Input */}
-        <div className="flex flex-col gap-6">
-          <section className="space-y-3">
-            <h2 className="text-lg font-semibold text-neutral-200 flex items-center gap-2">
-              <div className="w-6 h-6 rounded bg-amber-500 text-neutral-950 flex items-center justify-center text-xs font-bold">1</div>
-              스크린샷 업로드 및 조정
-            </h2>
-            <InventoryImageInput 
-              file={file}
-              previewUrl={previewUrl}
-              loading={ocrLoading} // OCR 로딩 상태 사용
-              progress={ocrProgress}
-              onFileSelect={handleFileSelect}
-              onReanalyze={handleReanalyze}
-            />
-            {ocrError && (
-              <div className="text-red-400 text-sm bg-red-950/30 border border-red-900/50 p-3 rounded">
-                {ocrError}
-              </div>
-            )}
-          </section>
+      <InventoryImageInput onImageSelect={handleFileSelect} />
 
-          <div className="flex justify-center text-neutral-600">
-            <ChevronRight className="rotate-90 lg:rotate-0" />
-          </div>
-
-          <section className="space-y-3 flex-1">
-            <h2 className="text-lg font-semibold text-neutral-200 flex items-center gap-2">
-              <div className="w-6 h-6 rounded bg-neutral-700 text-neutral-300 flex items-center justify-center text-xs font-bold">2</div>
-              텍스트 확인
-            </h2>
-            <InventoryTextInput 
-              text={text} 
-              onChange={setText} 
-            />
-
-            {/* AI 분석 상세 결과 (디버그 뷰) */}
-            {aiResults.length > 0 && (
-              <div className="mt-4 border-t border-neutral-800 pt-4">
-                <h3 className="text-sm font-medium text-neutral-400 mb-2">AI Vision Analysis ({aiResults.length} slots)</h3>
-                <div className="grid grid-cols-3 gap-2 max-h-60 overflow-y-auto pr-2">
-                  {aiResults.map((res, idx) => (
-                    <div key={idx} className="bg-neutral-900 border border-neutral-800 rounded p-2 flex flex-col gap-1">
-                      <div className="aspect-square bg-black rounded overflow-hidden flex items-center justify-center">
-                        {res.imageUrl ? (
-                          <img src={res.imageUrl} alt="Slot" className="w-full h-full object-contain" />
-                        ) : (
-                          <div className="w-4 h-4 rounded-full bg-neutral-800 animate-pulse" />
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-amber-400 truncate" title={`1. ${res.topLabel}`}>
-                          {res.topLabel} <span className="text-[10px] text-neutral-500">({(res.score * 100).toFixed(0)}%)</span>
-                        </p>
-                        
-                        {/* 2등, 3등 후보 표시 */}
-                        {res.candidates && res.candidates.slice(1, 3).map((cand, cIdx) => (
-                          <p key={cIdx} className="text-[10px] text-neutral-500 truncate pl-1 border-l border-neutral-700" title={`${cIdx + 2}. ${cand.label}`}>
-                            {cand.label} <span className="opacity-50">{(cand.score * 100).toFixed(0)}%</span>
-                          </p>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
-        </div>
-
-        {/* Right Column: Result */}
-        <div className="flex flex-col gap-6">
-          <section className="space-y-3 h-full flex flex-col">
-            <h2 className="text-lg font-semibold text-neutral-200 flex items-center gap-2">
-              <div className="w-6 h-6 rounded bg-neutral-700 text-neutral-300 flex items-center justify-center text-xs font-bold">3</div>
-              분석 결과
-            </h2>
-            <div className="flex-1">
-              <ResultTable items={classifiedItems} />
-            </div>
-          </section>
-        </div>
-
+      <div className="status-bar">
+        <p>Status: {status}</p>
+        {progress > 0 && progress < 100 && (
+          <progress value={progress} max="100" />
+        )}
       </div>
-    </Layout>
+
+      <ResultTable results={results} />
+    </div>
   );
 }
 
