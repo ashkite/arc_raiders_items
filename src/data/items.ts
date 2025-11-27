@@ -424,7 +424,7 @@ const ITEM_OVERRIDES: Record<string, Partial<ItemMetadata>> = {
   "Medium Gun Parts": { defaultKeepMin: 10, usedForCrafting: true },
   "Complex Gun Parts": { defaultKeepMin: 10, usedForCrafting: true },
 
-  // 퀘스트/드롭 특화 아이템 (Wiki 기반 업데이트)
+  // 퀘스트/드롭 특화 아이템 (Wiki & Beebom 기반 업데이트)
   "Antiseptic": { defaultKeepMin: 10, usedForQuests: true },
   "ARC Alloy": { defaultKeepMin: 20, usedForCrafting: true, usedForQuests: true },
   "Battery": { defaultKeepMin: 5, usedForQuests: true, category: 'material' },
@@ -447,6 +447,15 @@ const ITEM_OVERRIDES: Record<string, Partial<ItemMetadata>> = {
   "Wasp Driver": { defaultKeepMin: 5, usedForQuests: true },
   "Water Pump": { defaultKeepMin: 2, usedForQuests: true },
   "Wires": { defaultKeepMin: 20, usedForQuests: true },
+
+  // 판매/스크랩 권장 아이템 (Beebom Cheat Sheet 기반)
+  "Agave": { defaultKeepMin: 0, category: 'misc' },
+  "Air Freshener": { defaultKeepMin: 0, category: 'misc' },
+  "Alarm Clock": { defaultKeepMin: 0, category: 'misc' },
+  "ARC Coolant": { defaultKeepMin: 0, category: 'misc' },
+  "ARC Flex Rubber": { defaultKeepMin: 0, category: 'misc' },
+  "ARC Performance Steel": { defaultKeepMin: 0, category: 'misc' },
+  "Advanced ARC Powercell": { defaultKeepMin: 5, category: 'material' }, // 탄약 제작용 외엔 판매
 
   // 소모품 세부 튜닝
   "Adrenaline Shot": { defaultKeepMin: 5 },
