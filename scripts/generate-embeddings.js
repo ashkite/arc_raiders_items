@@ -18,6 +18,7 @@ const PUBLIC_DIR = path.join(ROOT, 'public');
 const ICON_DIR = path.join(PUBLIC_DIR, 'items');
 const ITEMS_JSON = path.join(ROOT, 'src', 'data', 'items.json');
 const OUTPUT = path.join(PUBLIC_DIR, 'embeddings.json');
+const ICONS_MAP = path.join(PUBLIC_DIR, 'icons-map.json');
 
 env.allowLocalModels = true;
 env.localModelPath = path.join(PUBLIC_DIR, 'models');
@@ -46,7 +47,21 @@ async function listIcons() {
   }
 }
 
-function mapNameToIcon(db, icons) {
+async function loadIconsMap() {
+  try {
+    const raw = await fs.readFile(ICONS_MAP, 'utf-8');
+    const list = JSON.parse(raw);
+    const map = new Map();
+    list.forEach((entry) => {
+      if (entry?.name && entry?.file) map.set(entry.name, entry.file);
+    });
+    return map;
+  } catch {
+    return new Map();
+  }
+}
+
+function mapNameToIcon(db, icons, iconsMap) {
   const iconMap = new Map();
   icons.forEach((file) => {
     const base = path.basename(file, path.extname(file));
@@ -57,6 +72,13 @@ function mapNameToIcon(db, icons) {
   Object.values(db.items).forEach((arr) => {
     arr.forEach((entry) => {
       const obj = typeof entry === 'string' ? { name: entry } : entry;
+      // 1) icons-map.json 매핑 우선
+      if (iconsMap.has(obj.name)) {
+        const file = iconsMap.get(obj.name);
+        pairs.push({ name: obj.name, file: path.join(PUBLIC_DIR, file) });
+        return;
+      }
+      // 2) slug 기반 매칭
       const slug = obj.icon || obj.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
       const file = iconMap.get(slug);
       if (file) pairs.push({ name: obj.name, file: path.join(ICON_DIR, file) });
@@ -68,13 +90,14 @@ function mapNameToIcon(db, icons) {
 async function main() {
   const db = await loadItemsDb();
   const icons = await listIcons();
-  if (icons.length === 0) {
+  const iconsMap = await loadIconsMap();
+  if (icons.length === 0 && iconsMap.size === 0) {
     throw new Error('아이콘이 없습니다. fetch-gamedata.js를 먼저 실행하세요.');
   }
 
-  const pairs = mapNameToIcon(db, icons);
+  const pairs = mapNameToIcon(db, icons, iconsMap);
   if (pairs.length === 0) {
-    throw new Error('아이콘과 아이템 이름을 매칭하지 못했습니다.');
+    throw new Error('아이콘과 아이템 이름을 매칭하지 못했습니다. icons-map.json 또는 파일명을 확인하세요.');
   }
 
   console.log(`아이템 ${pairs.length}개 임베딩 생성 시작...`);
