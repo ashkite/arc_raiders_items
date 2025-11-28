@@ -90,15 +90,18 @@ export const useAiVision = () => {
     if (hintText && hintText.length >= 3) {
       const cleanHint = hintText.toLowerCase().trim();
       
-      // A. 단순 포함/일치 검색
-      const exactMatch = ITEMS.find(item => item.name.toLowerCase() === cleanHint);
+      // A. 단순 포함/일치 검색 (이름 + 별칭)
+      const exactMatch = ITEMS.find(item => 
+        item.name.toLowerCase() === cleanHint || (item.aliases || []).some((a: string) => a.toLowerCase() === cleanHint)
+      );
       if (exactMatch) {
         return { label: exactMatch.name, score: 1.0 };
       }
 
       // B. Levenshtein 거리 계산 (오타 보정)
       const scoredItems = ITEMS.map((item: any) => {
-        const dist = levenshteinDistance(cleanHint, item.name.toLowerCase());
+        const candidates = [item.name.toLowerCase(), ...(item.aliases || []).map((a: string) => a.toLowerCase())];
+        const dist = Math.min(...candidates.map((c: string) => levenshteinDistance(cleanHint, c)));
         return { name: item.name, dist };
       });
 
@@ -106,7 +109,6 @@ export const useAiVision = () => {
 
       // 거리가 2 이하(매우 유사)면 신뢰하고 반환
       if (scoredItems[0].dist <= 2) {
-         // 글자 수가 짧은데 2글자 차이면 위험하므로 비율 체크
          const len = scoredItems[0].name.length;
          if (len > 4 || scoredItems[0].dist <= 1) {
             return { label: scoredItems[0].name, score: 0.95 };
@@ -126,7 +128,8 @@ export const useAiVision = () => {
     if (hintText && hintText.length > 2) {
       const cleanHint = hintText.toLowerCase().trim();
       const scoredItems = ITEMS.map((item: any) => {
-        const dist = levenshteinDistance(cleanHint, item.name.toLowerCase());
+        const candidates = [item.name.toLowerCase(), ...(item.aliases || []).map((a: string) => a.toLowerCase())];
+        const dist = Math.min(...candidates.map((c: string) => levenshteinDistance(cleanHint, c)));
         return { name: item.name, dist };
       });
       scoredItems.sort((a: any, b: any) => a.dist - b.dist);

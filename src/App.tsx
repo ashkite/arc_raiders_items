@@ -7,7 +7,7 @@ import { InventoryTextInput } from './components/InventoryTextInput';
 import { ModelLoader } from './components/ModelLoader';
 import { ResultTable } from './components/ResultTable';
 import { useAiVision } from './hooks/useAiVision';
-import { findItemBlobs, Rect } from './logic/blobDetector';
+import { Rect } from './logic/blobDetector';
 import { classifyItems } from './logic/classify';
 import { ClassifiedItem } from './types';
 

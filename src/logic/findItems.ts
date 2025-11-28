@@ -18,8 +18,11 @@ export function findKnownItems(text: string): RawItem[] {
 
   const dbKeywords = new Set<string>();
   dbItems.forEach(item => {
-    item.name.split(' ').forEach(word => {
-      if (word.length >= 3) dbKeywords.add(word.toLowerCase());
+    const variants = [item.name, ...(item.aliases || [])];
+    variants.forEach(name => {
+      name.split(' ').forEach(word => {
+        if (word.length >= 3) dbKeywords.add(word.toLowerCase());
+      });
     });
   });
 
@@ -57,26 +60,30 @@ export function findKnownItems(text: string): RawItem[] {
 
     // 2. 정밀 비교
     for (const dbItem of dbItems) {
+      const candidateNames = [dbItem.name, ...(dbItem.aliases || [])];
       const simpleLine = cleanLine.toLowerCase().replace(/\s/g, '');
-      const simpleName = dbItem.name.toLowerCase().replace(/\s/g, '');
-      
-      if (simpleLine.includes(simpleName)) {
-        bestScore = 1.0;
-        bestMatchItem = dbItem;
-        break;
-      }
 
-      const nameParts = dbItem.name.split(' ');
-      const windowSize = nameParts.length;
-      
-      if (lineWords.length >= windowSize) {
-        for (let i = 0; i <= lineWords.length - windowSize; i++) {
-          const phrase = lineWords.slice(i, i + windowSize).join(' ');
-          const score = getSimilarity(dbItem.name.toLowerCase(), phrase);
-          
-          if (score > bestScore) {
-            bestScore = score;
-            bestMatchItem = dbItem;
+      for (const candidate of candidateNames) {
+        const simpleName = candidate.toLowerCase().replace(/\s/g, '');
+        
+        if (simpleLine.includes(simpleName)) {
+          bestScore = 1.0;
+          bestMatchItem = dbItem;
+          break;
+        }
+
+        const nameParts = candidate.split(' ');
+        const windowSize = nameParts.length;
+        
+        if (lineWords.length >= windowSize) {
+          for (let i = 0; i <= lineWords.length - windowSize; i++) {
+            const phrase = lineWords.slice(i, i + windowSize).join(' ');
+            const score = getSimilarity(candidate.toLowerCase(), phrase);
+            
+            if (score > bestScore) {
+              bestScore = score;
+              bestMatchItem = dbItem;
+            }
           }
         }
       }

@@ -123,6 +123,92 @@ function dilate(data: Uint8Array, width: number, height: number, radius: number)
   return result;
 }
 
+const median = (values: number[]) => {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+};
+
+const iou = (a: Rect, b: Rect) => {
+  const x1 = Math.max(a.x, b.x);
+  const y1 = Math.max(a.y, b.y);
+  const x2 = Math.min(a.x + a.width, b.x + b.width);
+  const y2 = Math.min(a.y + a.height, b.y + b.height);
+
+  if (x2 <= x1 || y2 <= y1) return 0;
+
+  const interArea = (x2 - x1) * (y2 - y1);
+  const unionArea = a.width * a.height + b.width * b.height - interArea;
+  return interArea / unionArea;
+};
+
+/**
+ * Grid-based slot inference:
+ * - CLIP UI는 규칙적인 격자이므로, blob이 희미하게 검출되더라도
+ *   중앙 좌표를 이용해 그리드 라인을 추정한 뒤 전체 슬롯을 복원한다.
+ */
+const inferGridSlots = (rects: Rect[], width: number, height: number): Rect[] => {
+  if (rects.length < 4) return rects;
+
+  const centersX = rects.map(r => r.x + r.width / 2);
+  const centersY = rects.map(r => r.y + r.height / 2);
+  const widths = rects.map(r => r.width);
+  const heights = rects.map(r => r.height);
+
+  const cellW = median(widths) || 60;
+  const cellH = median(heights) || 60;
+
+  // 거리를 기반으로 행/열 간격 계산
+  const sortedX = [...centersX].sort((a, b) => a - b);
+  const sortedY = [...centersY].sort((a, b) => a - b);
+  const dx: number[] = [];
+  const dy: number[] = [];
+  for (let i = 1; i < sortedX.length; i++) dx.push(sortedX[i] - sortedX[i - 1]);
+  for (let i = 1; i < sortedY.length; i++) dy.push(sortedY[i] - sortedY[i - 1]);
+  const colGap = median(dx.filter(v => v > 5)) || cellW * 1.4;
+  const rowGap = median(dy.filter(v => v > 5)) || cellH * 1.4;
+
+  // 기준점: 가장 좌상단 슬롯 중심을 기준으로 격자 정렬
+  const originX = Math.min(...centersX) - cellW / 2;
+  const originY = Math.min(...centersY) - cellH / 2;
+
+  const rowIndexSet = new Set<number>();
+  const colIndexSet = new Set<number>();
+
+  centersY.forEach(y => rowIndexSet.add(Math.round((y - originY) / rowGap)));
+  centersX.forEach(x => colIndexSet.add(Math.round((x - originX) / colGap)));
+
+  const rows = [...rowIndexSet].sort((a, b) => a - b);
+  const cols = [...colIndexSet].sort((a, b) => a - b);
+
+  const generated: Rect[] = [];
+  rows.forEach(row => {
+    cols.forEach(col => {
+      const x = originX + col * colGap - cellW * 0.5;
+      const y = originY + row * rowGap - cellH * 0.5;
+      if (x < 0 || y < 0 || x + cellW > width || y + cellH > height) return;
+      generated.push({
+        x,
+        y,
+        width: cellW * 1.05,
+        height: cellH * 1.05
+      });
+    });
+  });
+
+  if (generated.length === 0) return rects;
+
+  // 기존 blob + 격자 추정 결과를 병합 (IoU 기반 중복 제거)
+  const combined: Rect[] = [];
+  [...rects, ...generated].forEach(candidate => {
+    const duplicate = combined.find(r => iou(r, candidate) > 0.6);
+    if (!duplicate) combined.push(candidate);
+  });
+
+  return combined;
+};
+
 export function findItemBlobs(imageData: ImageData, threshold: number = 50): Rect[] {
   const { width, height, data } = imageData;
   const size = width * height;
@@ -289,7 +375,8 @@ export function findItemBlobs(imageData: ImageData, threshold: number = 50): Rec
     }
   }
 
-  return finalRects;
+  const gridEnriched = inferGridSlots(finalRects, width, height);
+  return gridEnriched;
 }
 
 export const getItemSlots = async (file: File, threshold: number): Promise<BoundingBox[]> => {

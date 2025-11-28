@@ -11,9 +11,15 @@ export type ClassifiedItem = RawItem & {
   category?: string; // e.g., "ammo", "material", "quest"
 };
 
+export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
+
 export type ItemMetadata = {
   name: string;
   category: "ammo" | "material" | "consumable" | "weapon" | "armor" | "misc";
+  aliases: string[];
+  rarity: Rarity;
+  mainColor: string;
+  weight: number;
   usedForQuests?: boolean;
   usedForWorkshop?: boolean;
   usedForCrafting?: boolean;
