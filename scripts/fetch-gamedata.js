@@ -37,6 +37,14 @@ const slugify = (name) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '');
 
+const normalizeName = (raw) => {
+  return raw
+    .replace(/^File:/i, '')
+    .replace(/\.png$/i, '')
+    .replace(/[_-]?icon$/i, '')
+    .trim();
+};
+
 async function ensureDirs() {
   await fs.mkdir(ICON_DIR, { recursive: true });
 }
@@ -73,7 +81,7 @@ async function downloadIcon(src, name, base) {
   return { name, file: `items/${slug}.png` };
 }
 
-async function scrapeIcons() {
+async function scrapeIcons(knownNames = new Set()) {
   let html = null;
   let baseUrl = null;
   let lastErr = null;
@@ -103,7 +111,10 @@ async function scrapeIcons() {
     const cleanSrc = dataSrc.replace(/\\/g, '').replace(/(\/revision\/latest.*)/, '');
     // 라이선스 아이콘 등 불필요 이미지 건너뛰기
     if (cleanSrc.includes('licenses/cc-by') || cleanSrc.includes('wikigg_logo')) return;
-    images.push({ name: alt.trim(), src: cleanSrc });
+    const cleanName = normalizeName(alt);
+    // DB에 없는 이름이면 건너뛰기 (노이즈 제거)
+    if (knownNames.size > 0 && !knownNames.has(cleanName)) return;
+    images.push({ name: cleanName, src: cleanSrc });
   });
 
   const downloaded = [];
@@ -164,10 +175,16 @@ function mergeMetadata(existing, metaList = []) {
 
 async function main() {
   await ensureDirs();
-  const [icons, meta, db] = await Promise.all([
-    scrapeIcons(),
+  const db = await loadLocalDb();
+  const knownNames = new Set(
+    Object.values(db.items)
+      .flat()
+      .map((entry) => (typeof entry === 'string' ? entry : entry.name))
+  );
+
+  const [icons, meta] = await Promise.all([
+    scrapeIcons(knownNames),
     fetchMetadata(),
-    loadLocalDb(),
   ]);
 
   if (icons.length === 0) {
