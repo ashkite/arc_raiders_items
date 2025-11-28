@@ -24,6 +24,7 @@ const DEFAULT_ICON_SOURCES = [
   'https://arcraiders.wiki.gg/wiki/Category:Item_Icons',
 ].filter(Boolean);
 const ICON_HTML_FILE = process.env.ICON_HTML_FILE; // 로컬에 저장한 HTML 파일 경로
+const ICON_HTML_DIR = process.env.ICON_HTML_DIR; // 로컬에 저장한 여러 HTML이 있는 디렉터리
 const ICON_COOKIE = process.env.ICON_COOKIE; // 필요 시 세션 쿠키 전달
 const META_URL = 'https://raw.githubusercontent.com/Teyk0o/ARDB/main/data/items.json';
 const ROOT = path.resolve(__dirname, '..');
@@ -52,10 +53,8 @@ async function ensureDirs() {
 }
 
 async function fetchHtml(url) {
-  if (ICON_HTML_FILE) {
-    console.log(`ICON_HTML_FILE 사용: ${ICON_HTML_FILE}`);
-    return fs.readFile(ICON_HTML_FILE, 'utf-8');
-  }
+  const locals = await loadLocalHtmls();
+  if (locals) return locals;
 
   const res = await fetch(url, {
     headers: {
@@ -66,7 +65,25 @@ async function fetchHtml(url) {
     },
   });
   if (!res.ok) throw new Error(`Fetch failed: ${url} (${res.status})`);
-  return res.text();
+  return [{ html: await res.text(), localDir: null, baseUrl: new URL(url).origin }];
+}
+
+async function loadLocalHtmls() {
+  const inputs = [];
+  if (ICON_HTML_DIR) {
+    const files = (await fs.readdir(ICON_HTML_DIR)).filter(f => f.endsWith('.html'));
+    for (const file of files) {
+      const full = path.resolve(ICON_HTML_DIR, file);
+      const html = await fs.readFile(full, 'utf-8');
+      inputs.push({ html, localDir: path.dirname(full), baseUrl: 'https://arcraiders.wiki' });
+    }
+  } else if (ICON_HTML_FILE) {
+    console.log(`ICON_HTML_FILE 사용: ${ICON_HTML_FILE}`);
+    const full = path.resolve(ICON_HTML_FILE);
+    const html = await fs.readFile(full, 'utf-8');
+    inputs.push({ html, localDir: path.dirname(full), baseUrl: 'https://arcraiders.wiki' });
+  }
+  return inputs.length > 0 ? inputs : null;
 }
 
 async function downloadIcon(src, name, base, localDir) {
@@ -74,8 +91,8 @@ async function downloadIcon(src, name, base, localDir) {
   const outPath = path.join(ICON_DIR, `${slug}.png`);
 
   // 1) 로컬 HTML을 "전체 저장"했다면 item-icons_files에 이미지가 있을 수 있음
-  if (localDir && src.startsWith('./')) {
-    const candidate = path.resolve(localDir, src);
+  if (localDir && (src.startsWith('./') || src.startsWith('item-icons_files'))) {
+    const candidate = path.resolve(localDir, src.replace(/^\.\//, ''));
     try {
       const fileBuf = await fs.readFile(candidate);
       await fs.writeFile(outPath, fileBuf);
@@ -98,57 +115,46 @@ async function downloadIcon(src, name, base, localDir) {
 }
 
 async function scrapeIcons(knownNames = new Set()) {
-  let html = null;
-  let baseUrl = null;
-  let lastErr = null;
-  const htmlDir = ICON_HTML_FILE ? path.dirname(path.resolve(ICON_HTML_FILE)) : null;
-  for (const url of DEFAULT_ICON_SOURCES) {
-    try {
-      console.log(`아이콘 페이지 시도: ${url}`);
-      html = await fetchHtml(url);
-      baseUrl = new URL(url).origin;
-      break;
-    } catch (e) {
-      lastErr = e;
-      console.warn(`아이콘 페이지 실패: ${url} (${e.message})`);
-    }
-  }
-  if (!html) {
-    throw lastErr || new Error('아이콘 페이지를 불러오지 못했습니다.');
-  }
-  const $ = loadHtml(html);
+  const sources = await fetchHtml(DEFAULT_ICON_SOURCES[0]);
   const images = [];
 
-  // 1) 갤러리 파일명(text)에 기반
-  $('.gallerytext a').each((_, el) => {
-    const title = $(el).text();
-    if (!title) return;
-    const cleanName = normalizeName(title);
-    if (knownNames.size > 0 && !knownNames.has(cleanName)) return;
-    // 이미지 src는 이전 sibling img에서 가져오거나 제목 기반으로 추론
-    const imgEl = $(el).closest('.gallerytext').prev('.thumb').find('img');
-    const dataSrc = imgEl.attr('data-src') || imgEl.attr('src') || '';
-    const cleanSrc = dataSrc.replace(/\\/g, '').replace(/(\/revision\/latest.*)/, '');
-    images.push({ name: cleanName, src: cleanSrc });
-  });
+  sources.forEach(({ html, localDir, baseUrl }) => {
+    const $ = loadHtml(html);
+    // 1) 갤러리 파일명(text)에 기반
+    $('.gallerytext a').each((_, el) => {
+      const title = $(el).text();
+      if (!title) return;
+      const cleanName = normalizeName(title);
+      if (knownNames.size > 0 && !knownNames.has(cleanName)) return;
+      const imgEl = $(el).closest('.gallerytext').prev('.thumb').find('img');
+      const dataSrc = imgEl.attr('data-src') || imgEl.attr('src') || '';
+      const cleanSrc = dataSrc.replace(/\\/g, '').replace(/(\/revision\/latest.*)/, '');
+      images.push({ name: cleanName, src: cleanSrc, baseUrl, localDir });
+    });
 
-  // 2) alt 기반 백업 (주로 로고 등)
-  $('img').each((_, el) => {
-    const $el = $(el);
-    const alt = $el.attr('alt') || '';
-    const dataSrc = $el.attr('data-src') || $el.attr('src');
-    if (!alt || !dataSrc) return;
-    const cleanSrc = dataSrc.replace(/\\/g, '').replace(/(\/revision\/latest.*)/, '');
-    if (cleanSrc.includes('licenses/cc-by') || cleanSrc.includes('wikigg_logo')) return;
-    const cleanName = normalizeName(alt);
-    if (knownNames.size > 0 && !knownNames.has(cleanName)) return;
-    images.push({ name: cleanName, src: cleanSrc });
+    // 2) alt 기반 백업 (주로 로고 등)
+    $('img').each((_, el) => {
+      const $el = $(el);
+      const alt = $el.attr('alt') || '';
+      const dataSrc = $el.attr('data-src') || $el.attr('src');
+      if (!alt || !dataSrc) return;
+      const cleanSrc = dataSrc.replace(/\\/g, '').replace(/(\/revision\/latest.*)/, '');
+      if (cleanSrc.includes('licenses/cc-by') || cleanSrc.includes('wikigg_logo')) return;
+      const cleanName = normalizeName(alt);
+      if (knownNames.size > 0 && !knownNames.has(cleanName)) return;
+      images.push({ name: cleanName, src: cleanSrc, baseUrl, localDir });
+    });
   });
 
   const downloaded = [];
+  const seen = new Set();
   for (const img of images) {
-    const saved = await downloadIcon(img.src, img.name, baseUrl, htmlDir);
-    if (saved) downloaded.push(saved);
+    if (seen.has(img.name)) continue;
+    const saved = await downloadIcon(img.src, img.name, img.baseUrl, img.localDir);
+    if (saved) {
+      downloaded.push(saved);
+      seen.add(img.name);
+    }
   }
   return downloaded;
 }
