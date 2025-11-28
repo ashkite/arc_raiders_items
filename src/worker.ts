@@ -59,7 +59,16 @@ const embedImage = async (image: string | Blob): Promise<number[]> => {
     const res = await fetch(image);
     imgInput = await res.blob();
   }
-  const output = await extractor(imgInput, { pooling: 'mean', normalize: true });
+
+  // Blob -> Uint8Array로 변환해 processor가 이해할 수 있는 포맷으로 전달
+  if (imgInput instanceof Blob) {
+    const buf = await imgInput.arrayBuffer();
+    imgInput = new Uint8Array(buf);
+  }
+
+  const inputs = await extractor.processor(imgInput, { return_tensors: 'pt' });
+  const { image_embeds } = await extractor.model(inputs);
+  const output = { data: image_embeds.data };
   const vec = Array.from(output.data as ArrayLike<number>);
   return normalize(vec);
 };
