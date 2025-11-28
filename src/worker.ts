@@ -54,21 +54,8 @@ const loadEmbeddings = async () => {
 
 const embedImage = async (image: string | Blob): Promise<number[]> => {
   const extractor = await VisionPipeline.getInstance();
-  let imgInput: any = image;
-  if (typeof image === 'string') {
-    const res = await fetch(image);
-    imgInput = await res.blob();
-  }
-
-  // Blob -> Uint8Array로 변환해 processor가 이해할 수 있는 포맷으로 전달
-  if (imgInput instanceof Blob) {
-    const buf = await imgInput.arrayBuffer();
-    imgInput = new Uint8Array(buf);
-  }
-
-  const inputs = await extractor.processor(imgInput, { return_tensors: 'pt' });
-  const { image_embeds } = await extractor.model(inputs);
-  const output = { data: image_embeds.data };
+  // 파이프라인이 지원하는 입력: 이미지 URL(string) 또는 Blob
+  const output = await extractor(image, { pooling: 'mean', normalize: true });
   const vec = Array.from(output.data as ArrayLike<number>);
   return normalize(vec);
 };
