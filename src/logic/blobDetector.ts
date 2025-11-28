@@ -15,7 +15,7 @@ export type BoundingBox = Rect;
 
 const COLS = 7;
 const ROWS = 4;
-const PADDING_RATIO = 0.05; // 각 셀 내부 여백 비율
+const PADDING_PX = 6; // 슬롯 간격을 위해 안쪽으로 줄일 픽셀 값
 
 /**
  * 이미지에서 가장 큰 외곽선 바운딩 박스를 찾는다.
@@ -128,8 +128,8 @@ const findLargestContourBounds = (imageData: ImageData, threshold: number): Rect
 const sliceIntoGrid = (bounds: Rect): Rect[] => {
   const cellW = bounds.width / COLS;
   const cellH = bounds.height / ROWS;
-  const insetX = cellW * PADDING_RATIO;
-  const insetY = cellH * PADDING_RATIO;
+  const insetX = Math.min(PADDING_PX, cellW / 4);
+  const insetY = Math.min(PADDING_PX, cellH / 4);
 
   const slots: Rect[] = [];
   for (let r = 0; r < ROWS; r++) {
@@ -139,8 +139,8 @@ const sliceIntoGrid = (bounds: Rect): Rect[] => {
       slots.push({
         x: x + insetX,
         y: y + insetY,
-        width: cellW - insetX * 2,
-        height: cellH - insetY * 2,
+        width: Math.max(1, cellW - insetX * 2),
+        height: Math.max(1, cellH - insetY * 2),
       });
     }
   }
