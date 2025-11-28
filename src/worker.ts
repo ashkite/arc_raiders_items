@@ -1,4 +1,4 @@
-import { env, AutoProcessor, AutoModel } from '@xenova/transformers';
+import { env, pipeline } from '@xenova/transformers';
 import { ITEMS } from './data/items';
 
 // Configure Transformers.js to use local models
@@ -7,20 +7,16 @@ env.allowRemoteModels = false;
 env.localModelPath = '/models/'; 
 
 class VisionPipeline {
-  static processorPromise: Promise<any> | null = null;
-  static modelPromise: Promise<any> | null = null;
+  static pipePromise: Promise<any> | null = null;
 
   static async getInstance() {
-    if (!this.processorPromise) {
-      console.log('Loading CLIP processor (Xenova/clip-vit-base-patch32)...');
-      this.processorPromise = AutoProcessor.from_pretrained('Xenova/clip-vit-base-patch32');
+    if (!this.pipePromise) {
+      console.log('Loading CLIP image-feature-extraction pipeline (Xenova/clip-vit-base-patch32)...');
+      this.pipePromise = pipeline('image-feature-extraction', 'Xenova/clip-vit-base-patch32', {
+        quantized: true,
+      });
     }
-    if (!this.modelPromise) {
-      console.log('Loading CLIP model (Xenova/clip-vit-base-patch32)...');
-      this.modelPromise = AutoModel.from_pretrained('Xenova/clip-vit-base-patch32', { quantized: true });
-    }
-    const [processor, model] = await Promise.all([this.processorPromise, this.modelPromise]);
-    return { processor, model };
+    return this.pipePromise;
   }
 }
 
@@ -57,19 +53,14 @@ const loadEmbeddings = async () => {
 };
 
 const embedImage = async (image: string | Blob): Promise<number[]> => {
-  const { processor, model } = await VisionPipeline.getInstance();
+  const extractor = await VisionPipeline.getInstance();
   let imgInput: any = image;
   if (typeof image === 'string') {
     const res = await fetch(image);
     imgInput = await res.blob();
   }
-  const inputs = await processor(imgInput, { return_tensors: 'np' });
-  if (!inputs.pixel_values) {
-    console.error('[Worker] processor output missing pixel_values. keys:', Object.keys(inputs));
-    throw new Error('processor did not return pixel_values');
-  }
-  const { image_embeds } = await model(inputs);
-  const vec = Array.from(image_embeds.data as ArrayLike<number>);
+  const output = await extractor(imgInput, { pooling: 'mean', normalize: true });
+  const vec = Array.from(output.data as ArrayLike<number>);
   return normalize(vec);
 };
 
