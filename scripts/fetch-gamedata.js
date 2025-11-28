@@ -41,7 +41,9 @@ const normalizeName = (raw) => {
   return raw
     .replace(/^File:/i, '')
     .replace(/\.png$/i, '')
+    .replace(/\.webp$/i, '')
     .replace(/[_-]?icon$/i, '')
+    .replace(/_/g, ' ')
     .trim();
 };
 
@@ -67,7 +69,23 @@ async function fetchHtml(url) {
   return res.text();
 }
 
-async function downloadIcon(src, name, base) {
+async function downloadIcon(src, name, base, localDir) {
+  const slug = slugify(name) || 'unknown';
+  const outPath = path.join(ICON_DIR, `${slug}.png`);
+
+  // 1) 로컬 HTML을 "전체 저장"했다면 item-icons_files에 이미지가 있을 수 있음
+  if (localDir && src.startsWith('./')) {
+    const candidate = path.resolve(localDir, src);
+    try {
+      const fileBuf = await fs.readFile(candidate);
+      await fs.writeFile(outPath, fileBuf);
+      return { name, file: `items/${slug}.png` };
+    } catch (e) {
+      // 무시하고 원격 시도
+    }
+  }
+
+  // 2) 원격 다운로드
   const resolved = src.startsWith('http') ? src : new URL(src, base).toString();
   const res = await fetch(resolved);
   if (!res.ok) {
@@ -75,8 +93,6 @@ async function downloadIcon(src, name, base) {
     return null;
   }
   const arrayBuffer = await res.arrayBuffer();
-  const slug = slugify(name) || 'unknown';
-  const outPath = path.join(ICON_DIR, `${slug}.png`);
   await fs.writeFile(outPath, Buffer.from(arrayBuffer));
   return { name, file: `items/${slug}.png` };
 }
@@ -85,6 +101,7 @@ async function scrapeIcons(knownNames = new Set()) {
   let html = null;
   let baseUrl = null;
   let lastErr = null;
+  const htmlDir = ICON_HTML_FILE ? path.dirname(path.resolve(ICON_HTML_FILE)) : null;
   for (const url of DEFAULT_ICON_SOURCES) {
     try {
       console.log(`아이콘 페이지 시도: ${url}`);
@@ -102,24 +119,35 @@ async function scrapeIcons(knownNames = new Set()) {
   const $ = loadHtml(html);
   const images = [];
 
+  // 1) 갤러리 파일명(text)에 기반
+  $('.gallerytext a').each((_, el) => {
+    const title = $(el).text();
+    if (!title) return;
+    const cleanName = normalizeName(title);
+    if (knownNames.size > 0 && !knownNames.has(cleanName)) return;
+    // 이미지 src는 이전 sibling img에서 가져오거나 제목 기반으로 추론
+    const imgEl = $(el).closest('.gallerytext').prev('.thumb').find('img');
+    const dataSrc = imgEl.attr('data-src') || imgEl.attr('src') || '';
+    const cleanSrc = dataSrc.replace(/\\/g, '').replace(/(\/revision\/latest.*)/, '');
+    images.push({ name: cleanName, src: cleanSrc });
+  });
+
+  // 2) alt 기반 백업 (주로 로고 등)
   $('img').each((_, el) => {
     const $el = $(el);
     const alt = $el.attr('alt') || '';
     const dataSrc = $el.attr('data-src') || $el.attr('src');
     if (!alt || !dataSrc) return;
-    // wiki.gg는 썸네일 파라미터가 붙을 수 있으므로 원본 URL로 정리
     const cleanSrc = dataSrc.replace(/\\/g, '').replace(/(\/revision\/latest.*)/, '');
-    // 라이선스 아이콘 등 불필요 이미지 건너뛰기
     if (cleanSrc.includes('licenses/cc-by') || cleanSrc.includes('wikigg_logo')) return;
     const cleanName = normalizeName(alt);
-    // DB에 없는 이름이면 건너뛰기 (노이즈 제거)
     if (knownNames.size > 0 && !knownNames.has(cleanName)) return;
     images.push({ name: cleanName, src: cleanSrc });
   });
 
   const downloaded = [];
   for (const img of images) {
-    const saved = await downloadIcon(img.src, img.name, baseUrl);
+    const saved = await downloadIcon(img.src, img.name, baseUrl, htmlDir);
     if (saved) downloaded.push(saved);
   }
   return downloaded;
