@@ -1,4 +1,4 @@
-import { env, pipeline } from '@xenova/transformers';
+import { env, pipeline, RawImage } from '@xenova/transformers';
 import { ITEMS } from './data/items';
 
 // Configure Transformers.js to use local models
@@ -54,8 +54,11 @@ const loadEmbeddings = async () => {
 
 const embedImage = async (image: string | Blob): Promise<number[]> => {
   const extractor = await VisionPipeline.getInstance();
-  // 파이프라인이 지원하는 입력: 이미지 URL(string) 또는 Blob
-  const output = await extractor(image, { pooling: 'mean', normalize: true });
+  
+  // Explicitly read the image using RawImage to handle various input types (Blob, Data URL) reliably
+  const processedImage = await RawImage.read(image);
+  
+  const output = await extractor(processedImage, { pooling: 'mean', normalize: true });
   const vec = Array.from(output.data as ArrayLike<number>);
   return normalize(vec);
 };
