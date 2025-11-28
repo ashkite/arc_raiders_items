@@ -113,13 +113,17 @@ async function main() {
     throw new Error('아이콘과 아이템 이름을 매칭하지 못했습니다. icons-map.json 또는 파일명을 확인하세요.');
   }
 
+  const baseUrl = process.env.EMBED_BASE_URL ? process.env.EMBED_BASE_URL.replace(/\/+$/, '') : null;
+
   console.log(`아이템 ${pairs.length}개 임베딩 생성 시작...`);
   // 이미지 입력을 처리하는 전용 파이프라인 사용
   const extractor = await pipeline('image-feature-extraction', 'Xenova/clip-vit-base-patch32', { quantized: true });
 
   const result = {};
   for (const { name, file } of pairs) {
-    const fileUrl = pathToFileURL(file).href;
+    const fileUrl = baseUrl
+      ? `${baseUrl}/${path.basename(file)}`
+      : pathToFileURL(file).href;
     const output = await extractor(fileUrl, { pooling: 'mean', normalize: true });
     const vec = Array.from(output.data ?? output);
     result[name] = normalize(vec);
