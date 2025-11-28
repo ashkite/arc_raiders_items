@@ -112,7 +112,8 @@ export function useOcr() {
       // eslint-disable-next-line @typescript-eslint/ban-ts-comment
       // @ts-ignore
       await worker.setParameters?.({ tessedit_char_whitelist: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:xX()[]/-. ' });
-      const result = await worker.recognize(preprocessedImageUrl, { lang: 'eng' } as RecognizeOptions);
+      const opts: Partial<RecognizeOptions> = { lang: 'eng' };
+      const result = await worker.recognize(preprocessedImageUrl, opts);
 
       return {
         rawText: result.data.text,
