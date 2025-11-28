@@ -90,15 +90,34 @@ async function downloadIcon(src, name, base, localDir) {
   const slug = slugify(name) || 'unknown';
   const outPath = path.join(ICON_DIR, `${slug}.png`);
 
-  // 1) 로컬 HTML을 "전체 저장"했다면 item-icons_files에 이미지가 있을 수 있음
-  if (localDir && (src.startsWith('./') || src.startsWith('item-icons_files'))) {
-    const candidate = path.resolve(localDir, src.replace(/^\.\//, ''));
+  const tryCopy = async (candidate) => {
     try {
       const fileBuf = await fs.readFile(candidate);
       await fs.writeFile(outPath, fileBuf);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  // 1) 로컬 HTML을 "전체 저장"했다면 item-icons_files에 이미지가 있을 수 있음
+  if (localDir && (src.startsWith('./') || src.startsWith('item-icons_files'))) {
+    const candidate = path.resolve(localDir, src.replace(/^\.\//, ''));
+    if (await tryCopy(candidate)) {
       return { name, file: `items/${slug}.png` };
-    } catch (e) {
-      // 무시하고 원격 시도
+    }
+  }
+
+  // 1-보강) 파일명이 들어있는 다른 로컬 디렉터리 탐색 (ICON_HTML_DIR 하위)
+  if (ICON_HTML_DIR) {
+    const basename = path.basename(src);
+    const entries = await fs.readdir(ICON_HTML_DIR, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const candidate = path.join(ICON_HTML_DIR, entry.name, basename);
+      if (await tryCopy(candidate)) {
+        return { name, file: `items/${slug}.png` };
+      }
     }
   }
 
