@@ -8,7 +8,7 @@
 
 import fs from 'fs/promises';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { pipeline, env } from '@xenova/transformers';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -105,7 +105,8 @@ async function main() {
 
   const result = {};
   for (const { name, file } of pairs) {
-    const output = await extractor(file, { pooling: 'mean', normalize: true });
+    const fileUrl = pathToFileURL(file).href;
+    const output = await extractor(fileUrl, { pooling: 'mean', normalize: true });
     const vec = Array.from(output.data ?? output);
     result[name] = normalize(vec);
   }
