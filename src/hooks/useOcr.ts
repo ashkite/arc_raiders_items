@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react';
-import type { RecognizeOptions } from 'tesseract.js';
 import { OcrResult } from '../types';
 import { getSharedOcrWorker } from '../logic/ocrWorker';
 
