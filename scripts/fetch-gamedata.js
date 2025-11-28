@@ -19,6 +19,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const WIKI_ICON_URL = process.env.ICON_SOURCE_URL || 'https://arcraiders.wiki.gg/wiki/Category:Item_Icons';
+const ICON_HTML_FILE = process.env.ICON_HTML_FILE; // 로컬에 저장한 HTML 파일 경로
+const ICON_COOKIE = process.env.ICON_COOKIE; // 필요 시 세션 쿠키 전달
 const META_URL = 'https://raw.githubusercontent.com/Teyk0o/ARDB/main/data/items.json';
 const ROOT = path.resolve(__dirname, '..');
 const PUBLIC_DIR = path.join(ROOT, 'public');
@@ -36,11 +38,17 @@ async function ensureDirs() {
 }
 
 async function fetchHtml(url) {
+  if (ICON_HTML_FILE) {
+    console.log(`ICON_HTML_FILE 사용: ${ICON_HTML_FILE}`);
+    return fs.readFile(ICON_HTML_FILE, 'utf-8');
+  }
+
   const res = await fetch(url, {
     headers: {
       // wiki.gg는 UA가 없으면 401을 줄 수 있음
       'User-Agent': 'Mozilla/5.0 (fetch-gamedata-script)',
       Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      ...(ICON_COOKIE ? { Cookie: ICON_COOKIE } : {}),
     },
   });
   if (!res.ok) throw new Error(`Fetch failed: ${url} (${res.status})`);
