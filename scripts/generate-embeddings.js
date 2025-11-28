@@ -11,6 +11,7 @@ import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { pipeline, env } from '@xenova/transformers';
 import fetch, { Response } from 'node-fetch';
+import http from 'http';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -106,21 +107,29 @@ async function main() {
   const extractor = await pipeline('image-feature-extraction', 'Xenova/clip-vit-base-patch32', { quantized: true });
 
   const result = {};
-  // file:// 경로를 지원하기 위해 fetch를 오버라이드
-  const customFetch = async (url, options) => {
-    const target = typeof url === 'string' ? url : url?.toString?.() ?? '';
-    if (target.startsWith('file://')) {
-      const filePath = fileURLToPath(target);
-      const buf = await fs.readFile(filePath);
-      return new Response(buf, { status: 200 });
+  // 간이 정적 서버로 http://127.0.0.1:<port>/items/... 형태로 접근
+  const server = http.createServer(async (req, res) => {
+    const rel = decodeURIComponent(req.url || '/');
+    const targetPath = path.join(PUBLIC_DIR, rel.replace(/^\\//, ''));
+    try {
+      const buf = await fs.readFile(targetPath);
+      res.writeHead(200, { 'Content-Type': 'image/png' });
+      res.end(buf);
+    } catch (e) {
+      res.statusCode = 404;
+      res.end('not found');
     }
-    return fetch(url, options);
-  };
-  env.fetch = customFetch;
-  globalThis.fetch = customFetch;
+  });
+
+  const port = await new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', () => {
+      const addr = server.address();
+      resolve(addr.port);
+    });
+  });
 
   for (const { name, file } of pairs) {
-    const fileUrl = pathToFileURL(file).href;
+    const fileUrl = `http://127.0.0.1:${port}/items/${path.basename(file)}`;
     const output = await extractor(fileUrl, { pooling: 'mean', normalize: true });
     const vec = Array.from(output.data ?? output);
     result[name] = normalize(vec);
@@ -128,6 +137,7 @@ async function main() {
 
   await fs.writeFile(OUTPUT, JSON.stringify(result, null, 2));
   console.log(`임베딩 저장 완료: ${OUTPUT}`);
+  server.close();
 }
 
 main().catch((err) => {
