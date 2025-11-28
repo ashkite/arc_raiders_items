@@ -1,4 +1,4 @@
-import { env, pipeline } from '@xenova/transformers';
+import { env, AutoProcessor, AutoModel } from '@xenova/transformers';
 import { ITEMS } from './data/items';
 
 // Configure Transformers.js to use local models
@@ -7,18 +7,22 @@ env.allowRemoteModels = false;
 env.localModelPath = '/models/'; 
 
 class VisionPipeline {
-  static pipe: any = null;
+  static processorPromise: Promise<any> | null = null;
+  static modelPromise: Promise<any> | null = null;
 
   static async getInstance() {
-    if (!this.pipe) {
-      console.log('Loading CLIP (image-feature-extraction) pipeline from local resources...');
-      this.pipe = await pipeline('image-feature-extraction', 'Xenova/clip-vit-base-patch32', {
+    if (!this.processorPromise) {
+      console.log('Loading CLIP processor (Xenova/clip-vit-base-patch32)...');
+      this.processorPromise = AutoProcessor.from_pretrained('Xenova/clip-vit-base-patch32');
+    }
+    if (!this.modelPromise) {
+      console.log('Loading CLIP model (Xenova/clip-vit-base-patch32)...');
+      this.modelPromise = AutoModel.from_pretrained('Xenova/clip-vit-base-patch32', {
         quantized: true,
-        // @ts-ignore
-        device: 'webgpu',
       });
     }
-    return this.pipe;
+    const [processor, model] = await Promise.all([this.processorPromise, this.modelPromise]);
+    return { processor, model };
   }
 }
 
@@ -55,10 +59,12 @@ const loadEmbeddings = async () => {
 };
 
 const embedImage = async (image: string | Blob): Promise<number[]> => {
-  const extractor = await VisionPipeline.getInstance();
-  const output = await extractor(image, { pooling: 'mean', normalize: true });
-  const vec = (output?.data as ArrayLike<number>) ?? (Array.isArray(output) ? (output as number[]) : []);
-  return normalize(Array.from(vec));
+  const { processor, model } = await VisionPipeline.getInstance();
+  // processor가 pixel_values 텐서를 생성 (기본 return_tensors 사용)
+  const inputs = await processor(image);
+  const { image_embeds } = await model(inputs);
+  const vec = Array.from(image_embeds.data as ArrayLike<number>);
+  return normalize(vec);
 };
 
 self.onmessage = async (e) => {
