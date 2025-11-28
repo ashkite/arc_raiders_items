@@ -17,9 +17,7 @@ class VisionPipeline {
     }
     if (!this.modelPromise) {
       console.log('Loading CLIP model (Xenova/clip-vit-base-patch32)...');
-      this.modelPromise = AutoModel.from_pretrained('Xenova/clip-vit-base-patch32', {
-        quantized: true,
-      });
+      this.modelPromise = AutoModel.from_pretrained('Xenova/clip-vit-base-patch32', { quantized: true });
     }
     const [processor, model] = await Promise.all([this.processorPromise, this.modelPromise]);
     return { processor, model };
@@ -60,8 +58,12 @@ const loadEmbeddings = async () => {
 
 const embedImage = async (image: string | Blob): Promise<number[]> => {
   const { processor, model } = await VisionPipeline.getInstance();
-  // 문자열 URL이 텍스트로 처리되지 않도록 명시적으로 images 키를 사용
-  const inputs = await processor({ images: image }, { return_tensors: 'pt' });
+  let imgInput: any = image;
+  if (typeof image === 'string') {
+    const res = await fetch(image);
+    imgInput = await res.blob();
+  }
+  const inputs = await processor({ images: imgInput }, { return_tensors: 'np' });
   const { image_embeds } = await model({ pixel_values: inputs.pixel_values });
   const vec = Array.from(image_embeds.data as ArrayLike<number>);
   return normalize(vec);
