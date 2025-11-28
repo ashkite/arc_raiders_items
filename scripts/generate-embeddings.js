@@ -107,15 +107,17 @@ async function main() {
 
   const result = {};
   // file:// 경로를 지원하기 위해 fetch를 오버라이드
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (url, options) => {
-    if (typeof url === 'string' && url.startsWith('file://')) {
-      const filePath = url.replace('file://', '');
+  const customFetch = async (url, options) => {
+    const target = typeof url === 'string' ? url : url?.toString?.() ?? '';
+    if (target.startsWith('file://')) {
+      const filePath = fileURLToPath(target);
       const buf = await fs.readFile(filePath);
       return new Response(buf, { status: 200 });
     }
     return fetch(url, options);
   };
+  env.fetch = customFetch;
+  globalThis.fetch = customFetch;
 
   for (const { name, file } of pairs) {
     const fileUrl = pathToFileURL(file).href;
