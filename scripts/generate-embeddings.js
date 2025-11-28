@@ -110,7 +110,7 @@ async function main() {
   // 간이 정적 서버로 http://127.0.0.1:<port>/items/... 형태로 접근
   const server = http.createServer(async (req, res) => {
     const rel = decodeURIComponent(req.url || '/');
-    const targetPath = path.join(PUBLIC_DIR, rel.replace(/^\\//, ''));
+    const targetPath = path.join(PUBLIC_DIR, rel.replace(/^\/+/, ''));
     try {
       const buf = await fs.readFile(targetPath);
       res.writeHead(200, { 'Content-Type': 'image/png' });
