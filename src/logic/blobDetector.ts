@@ -114,13 +114,15 @@ const findLargestContourBounds = (imageData: ImageData, threshold: number): Rect
   }
 
   const l = largest as Rect;
+  const area = l.width * l.height;
+  const minArea = width * height * 0.2; // 전체 영역의 20% 미만이면 무시
 
   // 안전하게 이미지 경계 안으로 클램프
   return {
-    x: Math.max(0, l.x),
-    y: Math.max(0, l.y),
-    width: Math.min(width, l.x + l.width) - Math.max(0, l.x),
-    height: Math.min(height, l.y + l.height) - Math.max(0, l.y),
+    x: area < minArea ? 0 : Math.max(0, l.x),
+    y: area < minArea ? 0 : Math.max(0, l.y),
+    width: area < minArea ? width : Math.min(width, l.x + l.width) - Math.max(0, l.x),
+    height: area < minArea ? height : Math.min(height, l.y + l.height) - Math.max(0, l.y),
   };
 };
 

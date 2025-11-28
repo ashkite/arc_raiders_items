@@ -63,8 +63,8 @@ const embedImage = async (image: string | Blob): Promise<number[]> => {
     const res = await fetch(image);
     imgInput = await res.blob();
   }
-  const inputs = await processor({ images: imgInput }, { return_tensors: 'np' });
-  const { image_embeds } = await model({ pixel_values: inputs.pixel_values });
+  const inputs = await processor(imgInput);
+  const { image_embeds } = await model(inputs);
   const vec = Array.from(image_embeds.data as ArrayLike<number>);
   return normalize(vec);
 };
