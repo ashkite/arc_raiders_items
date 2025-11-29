@@ -121,12 +121,17 @@ async function main() {
 
   const result = {};
   for (const { name, file } of pairs) {
-    const fileUrl = baseUrl
+    const input = baseUrl
       ? `${baseUrl}/${path.basename(file)}`
-      : pathToFileURL(file).href;
-    const output = await extractor(fileUrl, { pooling: 'mean', normalize: true });
-    const vec = Array.from(output.data ?? output);
-    result[name] = normalize(vec);
+      : file;
+
+    try {
+      const output = await extractor(input, { pooling: 'mean', normalize: true });
+      const vec = Array.from(output.data ?? output);
+      result[name] = normalize(vec);
+    } catch (e) {
+      console.error(`Failed to process ${name} (${input}):`, e.message);
+    }
   }
 
   await fs.writeFile(OUTPUT, JSON.stringify(result, null, 2));
