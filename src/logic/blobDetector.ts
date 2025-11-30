@@ -31,8 +31,8 @@ const findBestBounds = (imageData: ImageData): Rect => {
   let bestRect: Rect = { x: 0, y: 0, width, height };
   let bestScore = -Infinity;
 
-  // 여러 임계값으로 시도
-  const thresholds = [30, 60, 90, 120, 150];
+  // 1. 다양한 임계값 시도 (더 촘촘하게)
+  const thresholds = [10, 30, 50, 70, 90, 110, 130, 150, 180, 210];
 
   for (const th of thresholds) {
     const binary = new Uint8Array(size);
@@ -40,10 +40,12 @@ const findBestBounds = (imageData: ImageData): Rect => {
       const r = imageData.data[i * 4];
       const g = imageData.data[i * 4 + 1];
       const b = imageData.data[i * 4 + 2];
+      // 단순 평균보다 ITU-R BT.601 공식 사용
       const gray = 0.299 * r + 0.587 * g + 0.114 * b;
       binary[i] = gray > th ? 1 : 0;
     }
 
+    // ... (CCL 로직은 동일하므로 생략 가능하지만, replace tool 특성상 전체 문맥 유지 필요) ...
     // 간단한 CCL (Connected Component Labeling)
     const labels = new Int32Array(size).fill(0);
     let nextLabel = 1;
@@ -101,18 +103,18 @@ const findBestBounds = (imageData: ImageData): Rect => {
       const h = b.maxY - b.minY + 1;
       const area = w * h;
       
-      // 너무 작거나(화면의 5% 미만) 너무 큰(95% 이상) 영역 제외
-      if (area < size * 0.05 || area > size * 0.95) return;
+      // 조건 완화: 화면의 2% 이상이면 후보로 인정 (작은 인벤토리 대응)
+      if (area < size * 0.02 || area > size * 0.98) return;
 
       const aspect = w / h;
-      const aspectScore = 1 - Math.abs(aspect - TARGET_ASPECT) / TARGET_ASPECT; // 1.0에 가까울수록 좋음
-      const areaScore = area / size; // 클수록 좋음
+      const aspectScore = 1 - Math.abs(aspect - TARGET_ASPECT) / TARGET_ASPECT; 
+      const areaScore = area / size;
 
-      // 점수 계산: 비율이 중요하지만 크기도 어느 정도 되어야 함
-      // 비율이 1.5 ~ 2.0 사이가 아니면 감점
-      if (aspect < 1.4 || aspect > 2.2) return;
+      // 비율 조건 완화: 1.3 ~ 2.5 허용 (7:4 = 1.75)
+      if (aspect < 1.3 || aspect > 2.5) return;
 
-      const score = aspectScore * 2.0 + areaScore;
+      // 점수 계산: 비율 점수 가중치 강화
+      const score = aspectScore * 3.0 + areaScore;
 
       if (score > bestScore) {
         bestScore = score;
@@ -121,8 +123,8 @@ const findBestBounds = (imageData: ImageData): Rect => {
     });
   }
 
-  // 만약 적절한 후보를 못 찾았다면 (점수가 너무 낮으면) 전체 화면 반환
-  if (bestScore < 0.5) {
+  // Fallback 조건 완화: 0.3점 이상이면 인정
+  if (bestScore < 0.3) {
     return { x: 0, y: 0, width, height };
   }
 
