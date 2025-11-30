@@ -7,7 +7,7 @@ const MODEL_ID = 'Xenova/clip-vit-base-patch32';
 env.allowLocalModels = true;
 env.allowRemoteModels = false;
 env.localModelPath = '/models/';
-env.useBrowserCache = false;
+env.useBrowserCache = true;
 
 class VisionPipeline {
   static modelPromise: Promise<any> | null = null;
@@ -15,11 +15,14 @@ class VisionPipeline {
 
   static async getInstance() {
     if (!this.modelPromise) {
+      console.time('Loading Model');
       console.log(`Loading CLIP vision model (${MODEL_ID})...`);
       this.modelPromise = CLIPVisionModel.from_pretrained(MODEL_ID, {
         quantized: true,
       });
       this.processorPromise = AutoProcessor.from_pretrained(MODEL_ID);
+      await Promise.all([this.modelPromise, this.processorPromise]);
+      console.timeEnd('Loading Model');
     }
     return Promise.all([this.modelPromise, this.processorPromise]);
   }
@@ -98,7 +101,10 @@ self.onmessage = async (e) => {
       : ITEMS.map((item: any) => item.name);
 
     const embeddings = await loadEmbeddings();
+    
+    console.time(`Inference-${id}`);
     const queryEmbedding = await embedImage(image);
+    console.timeEnd(`Inference-${id}`);
 
     const scored = labelsToCheck
       .map((label: string) => {
