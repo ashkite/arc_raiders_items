@@ -1,5 +1,5 @@
 import { env, RawImage, CLIPVisionModel, AutoProcessor } from '@xenova/transformers';
-import { ITEMS } from './data/items';
+// import { ITEMS } from './data/items'; // Removed to fix worker import error
 
 const MODEL_ID = 'Xenova/clip-vit-base-patch32';
 
@@ -117,10 +117,10 @@ self.onmessage = async (e) => {
 
 
       const results = batchVectors.map((queryVec, idx) => {
-        // Use specific candidates if provided for this image, otherwise use all
+        // Use specific candidates if provided for this image, otherwise use all available embeddings
         const labelsToCheck: string[] = (candidatesList && candidatesList[idx] && candidatesList[idx].length > 0)
           ? candidatesList[idx]
-          : ITEMS.map((item: any) => item.name);
+          : Object.keys(embeddings);
 
         const scored = labelsToCheck
           .map((label: string) => {
