@@ -57,16 +57,18 @@ class VisionPipeline {
 
   static async getInstance() {
     const tf = await loadTransformers();
-    const { AutoModel, AutoProcessor } = tf;
+    // CLIPVisionModel might not be exported, but CLIPVisionModelWithProjection is usually available for vision-only tasks
+    const VisionModel = tf.CLIPVisionModelWithProjection || tf.CLIPVisionModel || tf.AutoModel;
+    const { AutoProcessor } = tf;
 
-    if (!AutoModel || !AutoProcessor) {
-        throw new Error(`Failed to load AutoModel or AutoProcessor. Keys: ${Object.keys(tf)}`);
+    if (!VisionModel || !AutoProcessor) {
+        throw new Error(`Failed to load VisionModel or AutoProcessor. Keys: ${Object.keys(tf)}`);
     }
 
     if (!this.modelPromise) {
       console.time('Loading Model');
       console.log(`Loading CLIP vision model (${MODEL_ID})...`);
-      this.modelPromise = AutoModel.from_pretrained(MODEL_ID, {
+      this.modelPromise = VisionModel.from_pretrained(MODEL_ID, {
         quantized: true,
       });
       this.processorPromise = AutoProcessor.from_pretrained(MODEL_ID);
