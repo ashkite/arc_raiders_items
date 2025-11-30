@@ -49,6 +49,7 @@ export function ResultTable({ items }: Props) {
           <thead className="bg-neutral-950 text-neutral-400 uppercase text-xs font-semibold tracking-wider">
             <tr>
               <th className="px-4 py-3 w-12">수량</th>
+              <th className="px-4 py-3 w-16">아이콘</th>
               <th className="px-4 py-3">아이템 이름</th>
               <th className="px-4 py-3">분류</th>
               <th className="px-4 py-3">이유</th>
@@ -58,6 +59,16 @@ export function ResultTable({ items }: Props) {
             {filteredItems.map((item, idx) => (
               <tr key={`${item.name}-${idx}`} className="hover:bg-neutral-800/50 transition-colors">
                 <td className="px-4 py-3 font-mono text-neutral-300">{item.qty}</td>
+                <td className="px-4 py-3">
+                  <div className="w-10 h-10 bg-neutral-800 rounded overflow-hidden border border-neutral-700">
+                    <img 
+                      src={`/items/${item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}.png`} 
+                      alt={item.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => { (e.target as HTMLImageElement).style.opacity = '0.2'; }}
+                    />
+                  </div>
+                </td>
                 <td className="px-4 py-3 font-medium text-neutral-100">{item.name}</td>
                 <td className="px-4 py-3">
                   <ActionBadge action={item.action} />

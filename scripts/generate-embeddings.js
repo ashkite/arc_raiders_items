@@ -25,7 +25,7 @@ env.allowLocalModels = true;
 env.localModelPath = path.join(PUBLIC_DIR, 'models');
 // 로컬 모델이 없으면 remote 허용 (필요 시 네트워크)
 env.allowRemoteModels = true;
-const MODEL_ID = 'Xenova/clip-vit-base-patch32-vision';
+const MODEL_ID = 'Xenova/clip-vit-base-patch32';
 // 로컬 파일 접근용 커스텀 fetch 정의
 const customFetch = async (url, options) => {
   const target = typeof url === 'string' ? url : url?.toString?.() ?? '';
