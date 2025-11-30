@@ -12,13 +12,25 @@ async function loadTransformers() {
   if (!transformers) {
     console.log('[Worker] Importing transformers from CDN...');
     try {
-      transformers = await import(/* @vite-ignore */ TRANSFORMERS_CDN);
+      const module = await import(/* @vite-ignore */ TRANSFORMERS_CDN);
+      // Handle default export if present (common in UMD/ESM builds)
+      transformers = module.default || module;
       
+      console.log('[Worker] Transformers module keys:', Object.keys(transformers));
+
+      if (!transformers.env) {
+         // Sometimes env is at the top level even if default exists
+         if (module.env) transformers.env = module.env;
+      }
+
       // Configure Transformers.js
-      transformers.env.allowLocalModels = true;
-      transformers.env.allowRemoteModels = false;
-      transformers.env.localModelPath = '/models/';
-      transformers.env.useBrowserCache = true;
+      if (transformers.env) {
+        transformers.env.allowLocalModels = true;
+        transformers.env.allowRemoteModels = false;
+        transformers.env.localModelPath = '/models/';
+        transformers.env.useBrowserCache = true;
+      }
+      
       console.log('[Worker] Transformers loaded and configured.');
     } catch (e) {
       console.error('[Worker] Failed to load transformers from CDN:', e);
@@ -33,7 +45,12 @@ class VisionPipeline {
   static processorPromise: Promise<any> | null = null;
 
   static async getInstance() {
-    const { CLIPVisionModel, AutoProcessor } = await loadTransformers();
+    const tf = await loadTransformers();
+    const { CLIPVisionModel, AutoProcessor } = tf;
+
+    if (!CLIPVisionModel || !AutoProcessor) {
+        throw new Error(`Failed to load CLIPVisionModel or AutoProcessor. Keys: ${Object.keys(tf)}`);
+    }
 
     if (!this.modelPromise) {
       console.time('Loading Model');
