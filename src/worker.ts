@@ -1,19 +1,40 @@
-import { env, RawImage, CLIPVisionModel, AutoProcessor } from '@xenova/transformers';
-// import { ITEMS } from './data/items'; // Removed to fix worker import error
+// Removed local import to avoid Vite bundling issues with worker
+// import { env, RawImage, CLIPVisionModel, AutoProcessor } from '@xenova/transformers';
+
+// Load from CDN (ES Module) to bypass bundling
+const TRANSFORMERS_CDN = 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js';
 
 const MODEL_ID = 'Xenova/clip-vit-base-patch32';
 
-// Configure Transformers.js to use local models
-env.allowLocalModels = true;
-env.allowRemoteModels = false;
-env.localModelPath = '/models/';
-env.useBrowserCache = true;
+let transformers: any = null;
+
+async function loadTransformers() {
+  if (!transformers) {
+    console.log('[Worker] Importing transformers from CDN...');
+    try {
+      transformers = await import(/* @vite-ignore */ TRANSFORMERS_CDN);
+      
+      // Configure Transformers.js
+      transformers.env.allowLocalModels = true;
+      transformers.env.allowRemoteModels = false;
+      transformers.env.localModelPath = '/models/';
+      transformers.env.useBrowserCache = true;
+      console.log('[Worker] Transformers loaded and configured.');
+    } catch (e) {
+      console.error('[Worker] Failed to load transformers from CDN:', e);
+      throw e;
+    }
+  }
+  return transformers;
+}
 
 class VisionPipeline {
   static modelPromise: Promise<any> | null = null;
   static processorPromise: Promise<any> | null = null;
 
   static async getInstance() {
+    const { CLIPVisionModel, AutoProcessor } = await loadTransformers();
+
     if (!this.modelPromise) {
       console.time('Loading Model');
       console.log(`Loading CLIP vision model (${MODEL_ID})...`);
@@ -68,15 +89,61 @@ const loadEmbeddings = async () => {
   return embeddingsPromise;
 };
 
-// ... embedBatch function ...
+const embedBatch = async (images: string[]): Promise<number[][]> => {
+  console.log(`[Worker] embedBatch: Processing ${images.length} images...`);
+  
+  // Ensure transformers is loaded
+  const { RawImage } = await loadTransformers();
+  const [model, processor] = await VisionPipeline.getInstance();
+
+  // Read all images
+  console.log('[Worker] Reading images...');
+  const processedImages = await Promise.all(images.map(img => RawImage.read(img)));
+
+  // Preprocess images (batch)
+  console.log('[Worker] Preprocessing images...');
+  const imageInputs = await processor(processedImages);
+
+  // Run model (batch)
+  console.log('[Worker] Running model inference...');
+  const { image_embeds } = await model(imageInputs);
+  console.log('[Worker] Inference complete.');
+  
+  // Process output
+  if (!image_embeds || !image_embeds.data) {
+    throw new Error('Model output (image_embeds) is missing or invalid.');
+  }
+
+  const rawData = image_embeds.data as Float32Array; 
+  const dims = image_embeds.dims;
+  
+  if (!dims || dims.length < 2) {
+    throw new Error(`Invalid output dimensions: ${dims}`);
+  }
+
+  const batchSize = dims[0];
+  const hiddenSize = dims[1];
+  console.log(`[Worker] Output dims: [${batchSize}, ${hiddenSize}]`);
+  
+  const vectors: number[][] = [];
+  for (let i = 0; i < batchSize; i++) {
+    const start = i * hiddenSize;
+    const end = start + hiddenSize;
+    const vec = Array.from(rawData.slice(start, end));
+    vectors.push(normalize(vec));
+  }
+  
+  return vectors;
+};
 
 self.onmessage = async (e) => {
   const { id, type, images, candidatesList } = e.data;
   console.log(`[Worker] Received message: ${type} (ID: ${id})`);
 
   if (type === 'init') {
-    // ... existing init logic ...
     try {
+      // Ensure transformers is loaded first
+      await loadTransformers();
       await VisionPipeline.getInstance();
       
       // Warm-up: Run inference on a dummy image to compile shaders/WASM
@@ -105,7 +172,6 @@ self.onmessage = async (e) => {
   }
 
   if (type === 'analyze_batch') {
-    // ... existing analyze_batch logic ...
     try {
       console.time(`BatchInference-${id}`);
       console.log('[Worker] Start loading embeddings for batch...');
@@ -113,8 +179,6 @@ self.onmessage = async (e) => {
       console.log('[Worker] Embeddings loaded. Starting batch embedding...');
       const batchVectors = await embedBatch(images);
       console.timeEnd(`BatchInference-${id}`);
-      // ... rest of the logic
-
 
       const results = batchVectors.map((queryVec, idx) => {
         // Use specific candidates if provided for this image, otherwise use all available embeddings
