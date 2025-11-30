@@ -24,13 +24,24 @@ async function loadTransformers() {
       }
 
       // Configure Transformers.js
+      const config = {
+        allowLocalModels: false,
+        allowRemoteModels: true,
+        localModelPath: '/models/',
+        useBrowserCache: false, // Disable cache to fix "Unexpected token <" error
+      };
+
       if (transformers.env) {
-        transformers.env.allowLocalModels = false; // Disable local to avoid SPA fallback HTML issues
-        transformers.env.allowRemoteModels = true; 
-        // transformers.env.localModelPath = '/models/'; // Not used when allowLocalModels is false
-        transformers.env.useBrowserCache = true;
+        Object.assign(transformers.env, config);
       }
       
+      // Also try to configure global object if it exists (UMD fallback)
+      // @ts-ignore
+      if (self.transformers && self.transformers.env) {
+        // @ts-ignore
+        Object.assign(self.transformers.env, config);
+      }
+
       console.log('[Worker] Transformers loaded and configured.');
     } catch (e) {
       console.error('[Worker] Failed to load transformers from CDN:', e);
