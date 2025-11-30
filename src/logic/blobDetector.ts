@@ -15,121 +15,146 @@ export type BoundingBox = Rect;
 
 const COLS = 7;
 const ROWS = 4;
-const PADDING_PX = 8; // Increased padding for better isolation
+const PADDING_PX = 8;
+const TARGET_ASPECT = COLS / ROWS; // 1.75
 
 /**
- * 이미지에서 가장 큰 외곽선 바운딩 박스를 찾는다.
- * 없다면 전체 이미지를 반환.
+ * 다중 Threshold를 사용하여 가장 적합한 인벤토리 영역을 찾는다.
+ * 점수 기준: 
+ * 1. 비율(Aspect Ratio): 7:4 (1.75)에 가까울수록 높은 점수
+ * 2. 크기(Area): 너무 작지 않고 화면을 적절히 채우는 크기
  */
-const findLargestContourBounds = (imageData: ImageData, threshold: number): Rect => {
-  const { width, height, data } = imageData;
+const findBestBounds = (imageData: ImageData): Rect => {
+  const { width, height } = imageData;
   const size = width * height;
-  const binary = new Uint8Array(size);
+  
+  let bestRect: Rect = { x: 0, y: 0, width, height };
+  let bestScore = -Infinity;
 
-  // 그레이스케일 + 이진화
-  for (let i = 0; i < size; i++) {
-    const r = data[i * 4];
-    const g = data[i * 4 + 1];
-    const b = data[i * 4 + 2];
-    const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-    binary[i] = gray > threshold ? 1 : 0;
-  }
+  // 여러 임계값으로 시도
+  const thresholds = [30, 60, 90, 120, 150];
 
-  const labels = new Int32Array(size).fill(0);
-  let nextLabel = 1;
-  const parent: number[] = [];
-  const find = (x: number): number => {
-    if (parent[x] === x) return x;
-    parent[x] = find(parent[x]);
-    return parent[x];
-  };
-  const unite = (a: number, b: number) => {
-    const ra = find(a);
-    const rb = find(b);
-    if (ra !== rb) parent[rb] = ra;
-  };
+  for (const th of thresholds) {
+    const binary = new Uint8Array(size);
+    for (let i = 0; i < size; i++) {
+      const r = imageData.data[i * 4];
+      const g = imageData.data[i * 4 + 1];
+      const b = imageData.data[i * 4 + 2];
+      const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+      binary[i] = gray > th ? 1 : 0;
+    }
 
-  // CCL (간단한 연결 요소 라벨링)
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const idx = y * width + x;
-      if (binary[idx] === 0) continue;
+    // 간단한 CCL (Connected Component Labeling)
+    const labels = new Int32Array(size).fill(0);
+    let nextLabel = 1;
+    const parent: number[] = [];
+    const find = (x: number): number => {
+      if (parent[x] === x) return x;
+      return parent[x] = find(parent[x]);
+    };
+    const unite = (a: number, b: number) => {
+      const ra = find(a);
+      const rb = find(b);
+      if (ra !== rb) parent[rb] = ra;
+    };
 
-      const left = x > 0 ? labels[idx - 1] : 0;
-      const top = y > 0 ? labels[idx - width] : 0;
-
-      if (left === 0 && top === 0) {
-        labels[idx] = nextLabel;
-        parent[nextLabel] = nextLabel;
-        nextLabel++;
-      } else if (left !== 0 && top === 0) {
-        labels[idx] = left;
-      } else if (left === 0 && top !== 0) {
-        labels[idx] = top;
-      } else {
-        labels[idx] = Math.min(left, top);
-        if (left !== top) unite(left, top);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const idx = y * width + x;
+        if (binary[idx] === 0) continue;
+        const left = x > 0 ? labels[idx - 1] : 0;
+        const top = y > 0 ? labels[idx - width] : 0;
+        if (left === 0 && top === 0) {
+          labels[idx] = nextLabel;
+          parent[nextLabel] = nextLabel;
+          nextLabel++;
+        } else if (left !== 0 && top === 0) labels[idx] = left;
+        else if (left === 0 && top !== 0) labels[idx] = top;
+        else {
+          labels[idx] = Math.min(left, top);
+          unite(left, top);
+        }
       }
     }
-  }
 
-  const blobs = new Map<number, { minX: number; maxX: number; minY: number; maxY: number; area: number }>();
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const idx = y * width + x;
-      const label = labels[idx];
-      if (label === 0) continue;
-      const root = find(label);
-      const blob = blobs.get(root);
-      if (!blob) {
-        blobs.set(root, { minX: x, maxX: x, minY: y, maxY: y, area: 1 });
-      } else {
-        if (x < blob.minX) blob.minX = x;
-        if (x > blob.maxX) blob.maxX = x;
-        if (y < blob.minY) blob.minY = y;
-        if (y > blob.maxY) blob.maxY = y;
-        blob.area += 1;
+    const blobs = new Map<number, { minX: number; maxX: number; minY: number; maxY: number; area: number }>();
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const idx = y * width + x;
+        if (labels[idx] === 0) continue;
+        const root = find(labels[idx]);
+        const blob = blobs.get(root);
+        if (!blob) blobs.set(root, { minX: x, maxX: x, minY: y, maxY: y, area: 1 });
+        else {
+          blob.minX = Math.min(blob.minX, x);
+          blob.maxX = Math.max(blob.maxX, x);
+          blob.minY = Math.min(blob.minY, y);
+          blob.maxY = Math.max(blob.maxY, y);
+          blob.area++;
+        }
       }
     }
+
+    // 후보 평가
+    blobs.forEach(b => {
+      const w = b.maxX - b.minX + 1;
+      const h = b.maxY - b.minY + 1;
+      const area = w * h;
+      
+      // 너무 작거나(화면의 5% 미만) 너무 큰(95% 이상) 영역 제외
+      if (area < size * 0.05 || area > size * 0.95) return;
+
+      const aspect = w / h;
+      const aspectScore = 1 - Math.abs(aspect - TARGET_ASPECT) / TARGET_ASPECT; // 1.0에 가까울수록 좋음
+      const areaScore = area / size; // 클수록 좋음
+
+      // 점수 계산: 비율이 중요하지만 크기도 어느 정도 되어야 함
+      // 비율이 1.5 ~ 2.0 사이가 아니면 감점
+      if (aspect < 1.4 || aspect > 2.2) return;
+
+      const score = aspectScore * 2.0 + areaScore;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestRect = { x: b.minX, y: b.minY, width: w, height: h };
+      }
+    });
   }
 
-  // 가장 큰 외곽선 선택
-  let largest: Rect | null = null;
-  let maxArea = 0;
-  blobs.forEach((b) => {
-    const area = (b.maxX - b.minX + 1) * (b.maxY - b.minY + 1);
-    if (area > maxArea) {
-      maxArea = area;
-      largest = {
-        x: b.minX,
-        y: b.minY,
-        width: b.maxX - b.minX + 1,
-        height: b.maxY - b.minY + 1,
-      };
+  // 만약 적절한 후보를 못 찾았다면 (점수가 너무 낮으면) 전체 화면 반환
+  if (bestScore < 0.5) {
+    return { x: 0, y: 0, width, height };
+  }
+
+  return bestRect;
+};
+
+const sliceIntoGrid = (bounds: Rect): Rect[] => {
+  const cellW = bounds.width / COLS;
+  const cellH = bounds.height / ROWS;
+  const insetX = Math.min(PADDING_PX, cellW / 4);
+  const insetY = Math.min(PADDING_PX, cellH / 4);
+
+  const slots: Rect[] = [];
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const x = bounds.x + c * cellW;
+      const y = bounds.y + r * cellH;
+      slots.push({
+        x: x + insetX,
+        y: y + insetY,
+        width: Math.max(1, cellW - insetX * 2),
+        height: Math.max(1, cellH - insetY * 2),
+      });
     }
-  });
-
-  const fullRect = { x: 0, y: 0, width, height };
-
-  if (!largest) {
-    return fullRect;
   }
+  return slots;
+};
 
-  const l = largest as Rect;
-  const area = l.width * l.height;
-  const minArea = width * height * 0.25; // 최소 25% 이상이어야 유효한 인벤토리 영역으로 간주
-
-  if (area < minArea) {
-    return fullRect;
-  }
-
-  // 클램핑
-  return {
-    x: Math.max(0, l.x),
-    y: Math.max(0, l.y),
-    width: Math.min(width, l.x + l.width) - Math.max(0, l.x),
-    height: Math.min(height, l.y + l.height) - Math.max(0, l.y),
-  };
+export const detectInventorySlots = (imageData: ImageData, threshold = 50): Rect[] => {
+  // threshold 파라미터는 이제 무시하고 내부적으로 다중 threshold 사용
+  const bounds = findBestBounds(imageData);
+  return sliceIntoGrid(bounds);
 };
 
 /**
