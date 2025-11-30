@@ -31,8 +31,41 @@ const findBestBounds = (imageData: ImageData): Rect => {
   let bestRect: Rect = { x: 0, y: 0, width, height };
   let bestScore = -Infinity;
 
-  // 1. 다양한 임계값 시도 (더 촘촘하게)
-  const thresholds = [10, 30, 50, 70, 90, 110, 130, 150, 180, 210];
+// Morphological Dilation (팽창) - 흩어진 슬롯을 하나로 뭉침
+const dilate = (data: Uint8Array, width: number, height: number, kernelSize: number) => {
+  const output = new Uint8Array(data.length);
+  const offset = Math.floor(kernelSize / 2);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (data[y * width + x] === 1) {
+        for (let ky = -offset; ky <= offset; ky++) {
+          for (let kx = -offset; kx <= offset; kx++) {
+            const ny = y + ky;
+            const nx = x + kx;
+            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+              output[ny * width + nx] = 1;
+            }
+          }
+        }
+      }
+    }
+  }
+  return output;
+};
+
+/**
+ * 다중 Threshold를 사용하여 가장 적합한 인벤토리 영역을 찾는다.
+ */
+const findBestBounds = (imageData: ImageData): Rect => {
+  const { width, height } = imageData;
+  const size = width * height;
+  
+  let bestRect: Rect = { x: 0, y: 0, width, height };
+  let bestScore = -Infinity;
+
+  // 여러 임계값으로 시도
+  const thresholds = [30, 60, 90, 120, 150];
 
   for (const th of thresholds) {
     const binary = new Uint8Array(size);
@@ -45,7 +78,9 @@ const findBestBounds = (imageData: ImageData): Rect => {
       binary[i] = gray > th ? 1 : 0;
     }
 
-    // ... (CCL 로직은 동일하므로 생략 가능하지만, replace tool 특성상 전체 문맥 유지 필요) ...
+    // Dilation 적용 (커널 크기 15: 슬롯 간격이 꽤 넓으므로 크게 잡음)
+    const dilated = dilate(binary, width, height, 15);
+
     // 간단한 CCL (Connected Component Labeling)
     const labels = new Int32Array(size).fill(0);
     let nextLabel = 1;
@@ -63,7 +98,7 @@ const findBestBounds = (imageData: ImageData): Rect => {
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const idx = y * width + x;
-        if (binary[idx] === 0) continue;
+        if (dilated[idx] === 0) continue; // binary 대신 dilated 사용
         const left = x > 0 ? labels[idx - 1] : 0;
         const top = y > 0 ? labels[idx - width] : 0;
         if (left === 0 && top === 0) {
