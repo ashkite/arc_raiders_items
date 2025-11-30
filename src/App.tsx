@@ -84,33 +84,41 @@ function App() {
 
     const preparedItems = (await Promise.all(preparePromises)).filter((item): item is { imageBlob: Blob; hintText: string } => item !== null);
 
-    addLog(`${preparedItems.length}개 슬롯 분석 시작...`);
+    addLog(`${preparedItems.length}개 슬롯 이미지 추출 완료. 분석 시작...`);
 
     const rawItems: { name: string; qty: number }[] = [];
     let processedCount = 0;
-    const BATCH_SIZE = 8; // Larger batch size for worker
+    const BATCH_SIZE = 4; // Reduced batch size for stability
 
     for (let i = 0; i < preparedItems.length; i += BATCH_SIZE) {
       const chunk = preparedItems.slice(i, i + BATCH_SIZE);
-      const chunkResults = await analyzeBatch(chunk);
+      addLog(`배치 ${Math.floor(i / BATCH_SIZE) + 1} 전송 중 (${chunk.length}개)...`);
+      
+      try {
+        const chunkResults = await analyzeBatch(chunk);
+        addLog(`배치 ${Math.floor(i / BATCH_SIZE) + 1} 응답 수신 완료.`);
 
-      chunkResults.forEach((res, idx) => {
-        if (!res) return;
-        
-        const { hintText } = chunk[idx];
-        let qty = 1;
-        const xMatch = hintText.match(/x\s*(\d+)/i);
-        if (xMatch) {
-          qty = parseInt(xMatch[1], 10);
-        } else {
-          const allNumbers = hintText.match(/(\d+)/g);
-          if (allNumbers && allNumbers.length > 0) {
-            qty = parseInt(allNumbers[allNumbers.length - 1], 10);
+        chunkResults.forEach((res, idx) => {
+          if (!res) return;
+          
+          const { hintText } = chunk[idx];
+          let qty = 1;
+          const xMatch = hintText.match(/x\s*(\d+)/i);
+          if (xMatch) {
+            qty = parseInt(xMatch[1], 10);
+          } else {
+            const allNumbers = hintText.match(/(\d+)/g);
+            if (allNumbers && allNumbers.length > 0) {
+              qty = parseInt(allNumbers[allNumbers.length - 1], 10);
+            }
           }
-        }
-        
-        rawItems.push({ name: res.label, qty });
-      });
+          
+          rawItems.push({ name: res.label, qty });
+        });
+      } catch (e) {
+        console.error(e);
+        addLog(`오류: 배치 ${Math.floor(i / BATCH_SIZE) + 1} 처리 실패`);
+      }
 
       processedCount += chunk.length;
       setProgress((processedCount / preparedItems.length) * 100);
