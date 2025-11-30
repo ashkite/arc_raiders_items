@@ -6,6 +6,9 @@ export default defineConfig({
   plugins: [
     react(),
   ],
+  define: {
+    'process.env': {},
+  },
   optimizeDeps: {
     exclude: ['@xenova/transformers'],
   },
