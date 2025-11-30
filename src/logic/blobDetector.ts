@@ -15,7 +15,7 @@ export type BoundingBox = Rect;
 
 const COLS = 7;
 const ROWS = 4;
-const PADDING_PX = 6; // 슬롯 간격을 위해 안쪽으로 줄일 픽셀 값
+const PADDING_PX = 8; // Increased padding for better isolation
 
 /**
  * 이미지에서 가장 큰 외곽선 바운딩 박스를 찾는다.
@@ -109,20 +109,26 @@ const findLargestContourBounds = (imageData: ImageData, threshold: number): Rect
     }
   });
 
+  const fullRect = { x: 0, y: 0, width, height };
+
   if (!largest) {
-    return { x: 0, y: 0, width, height };
+    return fullRect;
   }
 
   const l = largest as Rect;
   const area = l.width * l.height;
-  const minArea = width * height * 0.2; // 전체 영역의 20% 미만이면 무시
+  const minArea = width * height * 0.25; // 최소 25% 이상이어야 유효한 인벤토리 영역으로 간주
 
-  // 안전하게 이미지 경계 안으로 클램프
+  if (area < minArea) {
+    return fullRect;
+  }
+
+  // 클램핑
   return {
-    x: area < minArea ? 0 : Math.max(0, l.x),
-    y: area < minArea ? 0 : Math.max(0, l.y),
-    width: area < minArea ? width : Math.min(width, l.x + l.width) - Math.max(0, l.x),
-    height: area < minArea ? height : Math.min(height, l.y + l.height) - Math.max(0, l.y),
+    x: Math.max(0, l.x),
+    y: Math.max(0, l.y),
+    width: Math.min(width, l.x + l.width) - Math.max(0, l.x),
+    height: Math.min(height, l.y + l.height) - Math.max(0, l.y),
   };
 };
 
