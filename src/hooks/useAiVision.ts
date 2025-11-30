@@ -53,6 +53,10 @@ function getWorker(): Worker {
       type: 'module',
     });
 
+    globalWorker.onerror = (error) => {
+      console.error("[AiVision] Worker Error:", error);
+    };
+
   // Update worker message handler to handle 'results' property
     globalWorker.onmessage = (e) => {
       const { id, status, result, results, error } = e.data;
