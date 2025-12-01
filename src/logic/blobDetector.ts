@@ -45,8 +45,10 @@ export const detectInventorySlots = (imageData: ImageData, _threshold = 50): Rec
   let allCandidates: Rect[] = [];
 
   // 1. 다중 Threshold 루프 (어두운 아이템 ~ 밝은 아이템 모두 포착)
-  // 30: 어두운 아이템, 60: 중간, 90: 밝은 하이라이트
-  const thresholds = [30, 60, 90]; 
+  // 30: 어두운 배경 속 아이템
+  // 60~90: 일반적인 아이템
+  // 120~150: 밝은 흰색/회색 컨테이너 및 하이라이트
+  const thresholds = [30, 60, 90, 120, 150]; 
 
   for (const th of thresholds) {
     const binary = new Uint8Array(size);
@@ -59,8 +61,8 @@ export const detectInventorySlots = (imageData: ImageData, _threshold = 50): Rec
       binary[i] = gray > th ? 1 : 0;
     }
 
-    // Dilation: 3 (아이템 간 분리를 위해 최소한으로 적용)
-    const dilated = dilate(binary, width, height, 3);
+    // Dilation: 5 (흰색 박스 내부 디테일이나 끊어진 선을 잇기 위해 강화)
+    const dilated = dilate(binary, width, height, 5);
 
     // CCL (Connected Component Labeling)
     const labels = new Int32Array(size).fill(0);
@@ -183,9 +185,9 @@ export const detectInventorySlots = (imageData: ImageData, _threshold = 50): Rec
   const medianH = heights[mid];
 
   const finalSlots = nmsSlots.filter(s => {
-    // 중앙값의 50%보다 작으면 "아이템"이 아니라 "부속품/노이즈"일 확률이 높음
-    // 단, 가로/세로 2칸 차지하는 아이템이 있을 수 있으므로 한쪽 변만 작아도 의심
-    if (s.width < medianW * 0.5 || s.height < medianH * 0.5) return false;
+    // 중앙값의 30%보다 작으면 노이즈일 확률이 높음 (완화)
+    // 하지만 너무 작은 노이즈는 여전히 걸러야 함
+    if (s.width < medianW * 0.3 || s.height < medianH * 0.3) return false;
     return true;
   });
 
