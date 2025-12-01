@@ -68,8 +68,8 @@ const findBestBounds = (imageData: ImageData): Rect => {
       binary[i] = gray > th ? 1 : 0;
     }
 
-    // Dilation 적용 (커널 크기 축소: 15 -> 8, 너무 크게 뭉치지 않도록)
-    const dilated = dilate(binary, width, height, 8);
+    // Dilation 적용 (커널 크기 재조정: 8 -> 12, 흩어진 아이템을 더 잘 뭉치게 함)
+    const dilated = dilate(binary, width, height, 12);
 
     // 간단한 CCL (Connected Component Labeling)
     const labels = new Int32Array(size).fill(0);
@@ -128,20 +128,20 @@ const findBestBounds = (imageData: ImageData): Rect => {
       const h = b.maxY - b.minY + 1;
       const area = w * h;
       
-      // 조건 완화: 화면의 2% 이상이면 후보로 인정
-      if (area < size * 0.02 || area > size * 0.98) return;
+      // 조건 강화: 화면의 10% 미만인 너무 작은 덩어리는 무시 (부분 감지 방지)
+      if (area < size * 0.10 || area > size * 0.95) return;
 
       const aspect = w / h;
       
-      // 비율 조건 완화: 1.2 ~ 2.8 허용
-      if (aspect < 1.2 || aspect > 2.8) return;
+      // 비율 조건 강화: 7:4 (1.75) 기준. 세로로 긴 것(1.3 미만)은 인벤토리일 수 없음
+      if (aspect < 1.3 || aspect > 2.5) return;
 
       const centerX = (b.minX + b.maxX) / 2;
       const centerY = (b.minY + b.maxY) / 2;
       const imgCenterX = width / 2;
       const imgCenterY = height / 2;
 
-      // 중앙 거리 점수 (가중치 증가)
+      // 중앙 거리 점수
       const distNorm = Math.sqrt(Math.pow(centerX - imgCenterX, 2) + Math.pow(centerY - imgCenterY, 2)) / Math.sqrt(Math.pow(width, 2) + Math.pow(height, 2));
       const centerScore = 1 - distNorm;
 
@@ -149,8 +149,8 @@ const findBestBounds = (imageData: ImageData): Rect => {
       const aspectScore = 1 - Math.abs(aspect - TARGET_ASPECT) / TARGET_ASPECT; 
       const areaScore = area / size;
 
-      // 종합 점수 (중앙 정렬에 더 큰 비중)
-      const score = centerScore * 5.0 + areaScore * 2.0 + aspectScore * 3.0;
+      // 종합 점수: 비율(Aspect) 점수 비중을 높여서 7x4 모양을 선호하게 함
+      const score = centerScore * 2.0 + areaScore * 2.0 + aspectScore * 5.0;
 
       if (score > bestScore) {
         bestScore = score;
