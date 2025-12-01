@@ -62,9 +62,7 @@ export function InventoryImageInput({ file, previewUrl, loading, progress, onFil
     }
   };
 
-  // 파일이나 설정이 바뀌면 슬롯 다시 찾기 (시각화용)
-  // 단, 사용자가 수동으로 편집 중일 때는 자동 감지가 덮어쓰지 않도록 주의해야 하지만,
-  // 여기서는 threshold를 건드리면 "다시 찾겠다"는 의도로 간주하고 초기화합니다.
+  // 파일이나 설정이 바뀌면 슬롯 다시 찾기
   useEffect(() => {
     if (!file || !previewUrl) return;
 
@@ -84,46 +82,6 @@ export function InventoryImageInput({ file, previewUrl, loading, progress, onFil
     return () => clearTimeout(timer);
   }, [file, threshold]);
 
-  // 캔버스 크기 동기화 (이미지 위에 정확히 오버레이)
-  useEffect(() => {
-    const syncCanvas = () => {
-      const img = imgRef.current;
-      const canvas = canvasRef.current;
-      if (!img || !canvas) return;
-
-      // Canvas의 표시 크기(CSS)를 이미지의 표시 크기와 일치시킴
-      canvas.style.width = `${img.clientWidth}px`;
-      canvas.style.height = `${img.clientHeight}px`;
-      
-      // 부모가 flex-center이므로 left/top 오프셋도 맞춰줌 (필요한 경우)
-      canvas.style.left = `${img.offsetLeft}px`;
-      canvas.style.top = `${img.offsetTop}px`;
-
-      // Canvas의 내부 해상도는 원본 이미지 해상도와 일치시킴
-      if (canvas.width !== img.naturalWidth || canvas.height !== img.naturalHeight) {
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-      }
-    };
-
-    const img = imgRef.current;
-    if (!img) return;
-
-    const observer = new ResizeObserver(syncCanvas);
-    observer.observe(img);
-    img.addEventListener('load', syncCanvas);
-    window.addEventListener('resize', syncCanvas);
-    
-    // 초기 실행
-    if (img.complete) syncCanvas();
-
-    return () => {
-      observer.disconnect();
-      img.removeEventListener('load', syncCanvas);
-      window.removeEventListener('resize', syncCanvas);
-    };
-  }, [previewUrl]);
-
   // 좌표 변환 헬퍼
   const getImgCoords = (e: React.MouseEvent) => {
     const canvas = canvasRef.current;
@@ -131,7 +89,7 @@ export function InventoryImageInput({ file, previewUrl, loading, progress, onFil
     if (!canvas || !img) return null;
 
     const rect = canvas.getBoundingClientRect();
-    // Canvas CSS 크기가 이미지 표시 크기와 같으므로 비율 계산이 정확해짐
+    // CSS로 Canvas 크기를 이미지와 일치시켰으므로 rect.width가 곧 이미지 표시 너비임
     const scaleX = img.naturalWidth / rect.width;
     const scaleY = img.naturalHeight / rect.height;
 
@@ -143,26 +101,21 @@ export function InventoryImageInput({ file, previewUrl, loading, progress, onFil
 
   // 마우스 핸들러 (박스 그리기)
   const handleMouseDown = (e: React.MouseEvent) => {
-    // 좌클릭만 허용
     if (e.button !== 0) return;
-    
     const coords = getImgCoords(e);
     if (!coords) return;
-
     setIsDrawing(true);
     setStartPos(coords);
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!isDrawing || !startPos) return;
-
     const coords = getImgCoords(e);
     if (!coords) return;
 
     const width = coords.x - startPos.x;
     const height = coords.y - startPos.y;
 
-    // 드래그 중인 박스 임시 표시
     setCurrentDragBox({
       x: width > 0 ? startPos.x : coords.x,
       y: height > 0 ? startPos.y : coords.y,
@@ -178,25 +131,19 @@ export function InventoryImageInput({ file, previewUrl, loading, progress, onFil
       setCurrentDragBox(null);
       return;
     }
-
-    // 너무 작은 박스는 무시 (오클릭 방지)
     if (currentDragBox.width > 10 && currentDragBox.height > 10) {
       setDetectedBlobs(prev => [...prev, currentDragBox]);
     }
-
     setIsDrawing(false);
     setStartPos(null);
     setCurrentDragBox(null);
   };
 
-  // 우클릭 핸들러 (박스 삭제)
   const handleContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault(); // 브라우저 메뉴 막기
-
+    e.preventDefault();
     const coords = getImgCoords(e);
     if (!coords) return;
 
-    // 클릭한 위치에 있는 박스 찾아서 삭제 (맨 위에 있는 것부터)
     const clickedIndex = detectedBlobs.findIndex(box => 
       coords.x >= box.x && coords.x <= box.x + box.width &&
       coords.y >= box.y && coords.y <= box.y + box.height
@@ -212,50 +159,38 @@ export function InventoryImageInput({ file, previewUrl, loading, progress, onFil
     const canvas = canvasRef.current;
     const img = imgRef.current;
     if (!canvas || !img) return;
-
-    // 이미지 로드 완료 체크
     if (!img.complete) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // canvas.width/height는 syncCanvas에서 관리하므로 여기서는 설정하지 않음
-    // 단, 그리기 전에 clear는 필요
+    // Canvas 내부 해상도 동기화
+    if (canvas.width !== img.naturalWidth || canvas.height !== img.naturalHeight) {
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+    }
+    
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.lineWidth = 4;
     
-    // 1. 확정된 박스들
     detectedBlobs.forEach(box => {
-      ctx.strokeStyle = '#ef4444'; // Red
+      ctx.strokeStyle = '#ef4444';
       ctx.strokeRect(box.x, box.y, box.width, box.height);
       ctx.fillStyle = 'rgba(239, 68, 68, 0.1)';
       ctx.fillRect(box.x, box.y, box.width, box.height);
     });
 
-    // 2. 드래그 중인 임시 박스
     if (currentDragBox) {
-      ctx.strokeStyle = '#fbbf24'; // Amber (그리는 중)
-      ctx.setLineDash([10, 10]); // 점선
+      ctx.strokeStyle = '#fbbf24';
+      ctx.setLineDash([10, 10]);
       ctx.strokeRect(currentDragBox.x, currentDragBox.y, currentDragBox.width, currentDragBox.height);
-      ctx.setLineDash([]); // 초기화
+      ctx.setLineDash([]);
       ctx.fillStyle = 'rgba(251, 191, 36, 0.2)';
       ctx.fillRect(currentDragBox.x, currentDragBox.y, currentDragBox.width, currentDragBox.height);
     }
-
   }, [detectedBlobs, currentDragBox, previewUrl]);
 
   const handleAnalyzeClick = () => {
-    // 여기서 detectedBlobs(사용자가 편집한 최종 박스들)를 상위 컴포넌트로 넘겨줘야 함.
-    // 하지만 현재 인터페이스는 onReanalyze(options) 형태임.
-    // -> App.tsx의 handleReanalyze를 수정하거나, 
-    // -> onReanalyze에 blobs를 직접 넘길 수 있게 확장해야 함.
-    
-    // 현재 구조상 가장 빠른 방법:
-    // onReanalyze의 시그니처를 무시하고, 추가 데이터로 blobs를 보냄. (타입 수정 필요하지만 JS라서 동작은 함)
-    // 혹은, 상위 컴포넌트 수정 없이 진행하려면: 
-    // blobDetector.ts에 "강제 오버라이드" 기능을 넣어야 하는데 복잡함.
-    
-    // 정석: Props 인터페이스 수정 후 전달
     onReanalyze({ threshold, invert, manualBlobs: detectedBlobs });
   };
 
@@ -272,20 +207,21 @@ export function InventoryImageInput({ file, previewUrl, loading, progress, onFil
 
   return (
     <div className="flex flex-col gap-4">
-            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-6 flex flex-col items-center gap-4 relative overflow-hidden">
-              {previewUrl ? (
-                <div className="relative w-full bg-neutral-950 flex justify-center rounded-md overflow-hidden border border-neutral-800 group">
-                  <div className="relative max-h-80 w-full flex justify-center">
-               <img 
+      <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-6 flex flex-col items-center gap-4 relative overflow-hidden">
+        {previewUrl ? (
+          <div className="relative w-full bg-neutral-950 flex justify-center rounded-md overflow-hidden border border-neutral-800 group p-4">
+            {/* Inner Wrapper: Fits to image size using inline-block */}
+            <div className="relative inline-block" style={{ fontSize: 0 }}>
+              <img 
                 ref={imgRef}
                 src={previewUrl} 
                 alt="Inventory Preview" 
                 className="object-contain max-h-80 w-auto opacity-90 select-none" 
-                onLoad={() => setThreshold(t => t)} // 로드 후 리렌더링 트리거
+                onLoad={() => setThreshold(t => t)} 
               />
               <canvas 
                 ref={canvasRef}
-                className="absolute cursor-crosshair"
+                className="absolute inset-0 w-full h-full cursor-crosshair"
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
@@ -301,7 +237,6 @@ export function InventoryImageInput({ file, previewUrl, loading, progress, onFil
               </div>
             )}
             
-            {/* 감지 상태 표시 */}
             <div className="absolute top-2 right-2 bg-black/60 backdrop-blur px-2 py-1 rounded text-xs text-white flex items-center gap-2 border border-white/10 pointer-events-none">
               <Scan className={clsx("w-3 h-3", detecting && "animate-pulse text-amber-400")} />
               {detecting ? '스캔 중...' : `${detectedBlobs.length}개 슬롯 감지됨`}
