@@ -4,7 +4,7 @@
 // Load from CDN (ES Module) to bypass bundling
 const TRANSFORMERS_CDN = 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js';
 
-const MODEL_ID = 'Xenova/clip-vit-base-patch32';
+const MODEL_ID = 'Xenova/clip-vit-base-patch16';
 
 let transformers: any = null;
 
