@@ -54,8 +54,8 @@ const findBestBounds = (imageData: ImageData): Rect => {
   let bestRect: Rect = { x: 0, y: 0, width, height };
   let bestScore = -Infinity;
 
-  // 1. 다양한 임계값 시도 (더 촘촘하게)
-  const thresholds = [10, 30, 50, 70, 90, 110, 130, 150, 180, 210];
+  // 1. 다양한 임계값 시도 (어두운 배경 노이즈 제거를 위해 최소값 상향)
+  const thresholds = [30, 50, 70, 90, 110, 130, 150, 180, 210];
 
   for (const th of thresholds) {
     const binary = new Uint8Array(size);
@@ -68,8 +68,8 @@ const findBestBounds = (imageData: ImageData): Rect => {
       binary[i] = gray > th ? 1 : 0;
     }
 
-    // Dilation 적용 (커널 크기 15: 슬롯 간격이 꽤 넓으므로 크게 잡음)
-    const dilated = dilate(binary, width, height, 15);
+    // Dilation 적용 (커널 크기 축소: 15 -> 8, 너무 크게 뭉치지 않도록)
+    const dilated = dilate(binary, width, height, 8);
 
     // 간단한 CCL (Connected Component Labeling)
     const labels = new Int32Array(size).fill(0);
@@ -141,7 +141,7 @@ const findBestBounds = (imageData: ImageData): Rect => {
       const imgCenterX = width / 2;
       const imgCenterY = height / 2;
 
-      // 중앙 거리 점수
+      // 중앙 거리 점수 (가중치 증가)
       const distNorm = Math.sqrt(Math.pow(centerX - imgCenterX, 2) + Math.pow(centerY - imgCenterY, 2)) / Math.sqrt(Math.pow(width, 2) + Math.pow(height, 2));
       const centerScore = 1 - distNorm;
 
@@ -149,8 +149,8 @@ const findBestBounds = (imageData: ImageData): Rect => {
       const aspectScore = 1 - Math.abs(aspect - TARGET_ASPECT) / TARGET_ASPECT; 
       const areaScore = area / size;
 
-      // 종합 점수
-      const score = centerScore * 3.0 + areaScore * 2.0 + aspectScore * 1.0;
+      // 종합 점수 (중앙 정렬에 더 큰 비중)
+      const score = centerScore * 5.0 + areaScore * 2.0 + aspectScore * 3.0;
 
       if (score > bestScore) {
         bestScore = score;
