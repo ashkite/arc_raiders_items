@@ -27,8 +27,7 @@ async function loadTransformers() {
       const config = {
         allowLocalModels: false,
         allowRemoteModels: true,
-        localModelPath: '/models/',
-        useBrowserCache: false, // Disable cache to fix "Unexpected token <" error
+        useBrowserCache: true,
       };
 
       if (transformers.env) {
@@ -235,7 +234,8 @@ self.onmessage = async (e) => {
         if (scored.length === 0) return { label: "Unknown", score: 0 };
 
         scored.sort((a, b) => b.score - a.score);
-        return scored[0];
+        // Return top 5 candidates for re-ranking
+        return scored.slice(0, 5);
       });
 
       self.postMessage({

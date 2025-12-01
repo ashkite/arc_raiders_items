@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const MODEL_ID = 'Xenova/clip-vit-base-patch32';
+const MODEL_ID = 'Xenova/clip-vit-base-patch16';
 const OUTPUT_DIR = path.resolve(__dirname, `../public/models/${MODEL_ID}`);
 
 // 다운로드할 파일 매핑 (Source -> Destination)
