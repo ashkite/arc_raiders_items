@@ -46,7 +46,7 @@ export const detectInventorySlots = (imageData: ImageData, _threshold = 50): Rec
   // 1. 이진화 (Thresholding)
   // 여러 임계값을 시도하는 대신, 중간값 하나를 사용하거나 적응형으로 가는 게 좋지만,
   // 여기서는 밝은 아이템을 잡기 위해 약간 높은 값을 기본으로 사용.
-  const th = 45; 
+  const th = 60; 
   const binary = new Uint8Array(size);
   
   for (let i = 0; i < size; i++) {
@@ -59,7 +59,7 @@ export const detectInventorySlots = (imageData: ImageData, _threshold = 50): Rec
 
   // 2. Dilation (팽창) - 아주 작게 적용
   // 아이템 내부의 빈 공간은 메우되, 아이템끼리는 붙지 않도록 커널 크기를 2~3으로 설정.
-  const dilated = dilate(binary, width, height, 3);
+  const dilated = dilate(binary, width, height, 5);
 
   // 3. CCL (Connected Component Labeling)
   const labels = new Int32Array(size).fill(0);
@@ -124,35 +124,20 @@ export const detectInventorySlots = (imageData: ImageData, _threshold = 50): Rec
   }
 
   // 4. Blob 필터링 및 변환
-  const validSlots: Rect[] = [];
-  const minArea = size * 0.005; // 화면의 0.5% 이상 (너무 작은 노이즈 제거)
-  const maxArea = size * 0.3;   // 화면의 30% 이하 (배경 전체 제거)
+  let candidateSlots: Rect[] = [];
+  const minArea = size * 0.001; // 최소 크기 하향 조정 (작은 조각도 일단 수집)
+  const maxArea = size * 0.4;
 
   blobs.forEach((b) => {
-    // 임시 저장된 maxX, maxY를 실제 width, height로 변환
     const realX = b.x;
     const realY = b.y;
     const realW = b.width - b.x + 1;
     const realH = b.height - b.y + 1;
 
     const area = realW * realH;
-    const aspect = realW / realH;
-
-    // 조건 1: 크기
     if (area < minArea || area > maxArea) return;
 
-    // 조건 2: 비율 (아이템은 대체로 정사각형 ~ 직사각형)
-    // 1x1(1.0), 2x1(2.0), 1x2(0.5) 등을 모두 포용하기 위해 범위를 넓게 잡음.
-    if (aspect < 0.4 || aspect > 3.0) return;
-
-    // 조건 3: 화면 가장자리에 붙은 잘린 이미지는 제외 (선택적)
-    const margin = 2;
-    if (realX <= margin || realY <= margin || 
-        realX + realW >= width - margin || realY + realH >= height - margin) {
-      return;
-    }
-
-    validSlots.push({
+    candidateSlots.push({
       x: realX,
       y: realY,
       width: realW,
@@ -160,11 +145,51 @@ export const detectInventorySlots = (imageData: ImageData, _threshold = 50): Rec
     });
   });
 
-  // 5. 정렬 (상단 -> 하단, 좌 -> 우 순서)
-  // y좌표가 비슷하면 x좌표로 정렬 (줄바꿈 고려)
+  // 5. 가까운 영역 병합 (Merge nearby rects)
+  // 하나의 아이템이 여러 조각으로 나뉜 경우를 하나로 합침
+  const mergeDistance = Math.max(width, height) * 0.02; // 화면 크기의 2% 이내면 병합
+
+  let merged = true;
+  while (merged) {
+    merged = false;
+    for (let i = 0; i < candidateSlots.length; i++) {
+      for (let j = i + 1; j < candidateSlots.length; j++) {
+        const r1 = candidateSlots[i];
+        const r2 = candidateSlots[j];
+
+        // 두 사각형 사이의 거리 계산 (겹치거나 가까우면)
+        const intersectX = Math.max(0, Math.min(r1.x + r1.width, r2.x + r2.width) - Math.max(r1.x, r2.x) + mergeDistance);
+        const intersectY = Math.max(0, Math.min(r1.y + r1.height, r2.y + r2.height) - Math.max(r1.y, r2.y) + mergeDistance);
+
+        if (intersectX > 0 && intersectY > 0) {
+          // 병합 실행
+          const newX = Math.min(r1.x, r2.x);
+          const newY = Math.min(r1.y, r2.y);
+          const newW = Math.max(r1.x + r1.width, r2.x + r2.width) - newX;
+          const newH = Math.max(r1.y + r1.height, r2.y + r2.height) - newY;
+
+          candidateSlots[i] = { x: newX, y: newY, width: newW, height: newH };
+          candidateSlots.splice(j, 1); // r2 제거
+          merged = true;
+          break; // 배열이 변경되었으므로 다시 시작
+        }
+      }
+      if (merged) break;
+    }
+  }
+
+  // 6. 최종 필터링 (병합 후 모양 검증)
+  const validSlots = candidateSlots.filter(r => {
+    const aspect = r.width / r.height;
+    // 병합 후에도 비율이 너무 이상하면 제거 (1x1 아이템 위주이므로 정사각형에 가까워야 함)
+    // 가로로 긴 2칸짜리 아이템도 있을 수 있으므로 2.5까지 허용
+    return aspect > 0.5 && aspect < 2.5;
+  });
+
+  // 7. 정렬 (상단 -> 하단, 좌 -> 우 순서)
   validSlots.sort((a, b) => {
     const yDiff = Math.abs(a.y - b.y);
-    if (yDiff < height * 0.05) { // 같은 줄(Row)로 간주할 오차 범위
+    if (yDiff < height * 0.05) {
       return a.x - b.x;
     }
     return a.y - b.y;
