@@ -38,24 +38,6 @@ const dilate = (data: Uint8Array, width: number, height: number, kernelSize: num
   return output;
 };
 
-// 두 사각형의 겹침 비율 계산 (작은 사각형 기준)
-// 반환값: 작은 사각형 면적 대비 교차 면적 비율 (0.0 ~ 1.0)
-// 1.0이면 작은 사각형이 큰 사각형 안에 완전히 포함됨
-const getOverlapRatio = (r1: Rect, r2: Rect) => {
-  const x1 = Math.max(r1.x, r2.x);
-  const y1 = Math.max(r1.y, r2.y);
-  const x2 = Math.min(r1.x + r1.width, r2.x + r2.width);
-  const y2 = Math.min(r1.y + r1.height, r2.y + r2.height);
-
-  if (x2 <= x1 || y2 <= y1) return 0;
-
-  const intersection = (x2 - x1) * (y2 - y1);
-  const area1 = r1.width * r1.height;
-  const area2 = r2.width * r2.height;
-  
-  return intersection / Math.min(area1, area2);
-};
-
 export const detectInventorySlots = (imageData: ImageData, _threshold = 50): Rect[] => {
   const { width, height } = imageData;
   const size = width * height;
