@@ -61,12 +61,14 @@ export function ResultTable({ items }: Props) {
                 <td className="px-4 py-3 font-mono text-neutral-300">{item.qty}</td>
                 <td className="px-4 py-3">
                   <div className="w-10 h-10 bg-neutral-800 rounded overflow-hidden border border-neutral-700">
-                    <img 
-                      src={`/items/${item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}.png`} 
-                      alt={item.name}
-                      className="w-full h-full object-cover"
-                      onError={(e) => { (e.target as HTMLImageElement).style.opacity = '0.2'; }}
-                    />
+                <img 
+                  src={`${import.meta.env.BASE_URL}items/${item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}.png`}
+                  alt={result.label} 
+                  className="w-12 h-12 object-contain rounded-md border border-white/10 bg-black/20"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
                   </div>
                 </td>
                 <td className="px-4 py-3 font-medium text-neutral-100">{item.name}</td>

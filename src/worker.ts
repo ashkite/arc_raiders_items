@@ -100,7 +100,10 @@ const loadEmbeddings = async () => {
     console.log('[Worker] Loading embeddings.json...');
     embeddingsPromise = (async () => {
       try {
-        const res = await fetch('/embeddings.json');
+        // Use BASE_URL injected by Vite for correct path in GitHub Pages
+        const baseUrl = import.meta.env.BASE_URL;
+        const url = baseUrl + 'embeddings.json';
+        const res = await fetch(url);
         if (!res.ok) throw new Error(`Failed to fetch embeddings: ${res.status}`);
         const json = await res.json() as Record<string, number[]>;
         const normalized: Record<string, number[]> = {};
