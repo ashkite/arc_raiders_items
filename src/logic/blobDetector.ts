@@ -59,8 +59,8 @@ export const detectInventorySlots = (imageData: ImageData, _threshold = 50): Rec
       binary[i] = gray > th ? 1 : 0;
     }
 
-    // Dilation: 8 (조각난 아이템을 하나로 합치기 위해 더 키움)
-    const dilated = dilate(binary, width, height, 8);
+    // Dilation: 3 (아이템 간 분리를 위해 최소한으로 적용)
+    const dilated = dilate(binary, width, height, 3);
 
     // CCL (Connected Component Labeling)
     const labels = new Int32Array(size).fill(0);
@@ -160,8 +160,9 @@ export const detectInventorySlots = (imageData: ImageData, _threshold = 50): Rec
         const intersection = (x2 - x1) * (y2 - y1);
         const candidateArea = candidate.width * candidate.height;
         
-        // 교차 영역이 후보(작은 박스) 면적의 50% 이상이면 중복/포함으로 간주하고 버림
-        if (intersection / candidateArea > 0.5) {
+        // 교차 영역이 후보(작은 박스) 면적의 75% 이상일 때만 중복/포함으로 간주
+        // (아이템들이 다닥다닥 붙어있을 수 있으므로 기준을 높임)
+        if (intersection / candidateArea > 0.75) {
           shouldAdd = false;
           break;
         }
