@@ -84,13 +84,54 @@ export function InventoryImageInput({ file, previewUrl, loading, progress, onFil
     return () => clearTimeout(timer);
   }, [file, threshold]);
 
-  // 좌표 변환 헬퍼: 캔버스 클릭 좌표(Display) -> 이미지 원본 좌표(Natural)
+  // 캔버스 크기 동기화 (이미지 위에 정확히 오버레이)
+  useEffect(() => {
+    const syncCanvas = () => {
+      const img = imgRef.current;
+      const canvas = canvasRef.current;
+      if (!img || !canvas) return;
+
+      // Canvas의 표시 크기(CSS)를 이미지의 표시 크기와 일치시킴
+      canvas.style.width = `${img.clientWidth}px`;
+      canvas.style.height = `${img.clientHeight}px`;
+      
+      // 부모가 flex-center이므로 left/top 오프셋도 맞춰줌 (필요한 경우)
+      canvas.style.left = `${img.offsetLeft}px`;
+      canvas.style.top = `${img.offsetTop}px`;
+
+      // Canvas의 내부 해상도는 원본 이미지 해상도와 일치시킴
+      if (canvas.width !== img.naturalWidth || canvas.height !== img.naturalHeight) {
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+      }
+    };
+
+    const img = imgRef.current;
+    if (!img) return;
+
+    const observer = new ResizeObserver(syncCanvas);
+    observer.observe(img);
+    img.addEventListener('load', syncCanvas);
+    window.addEventListener('resize', syncCanvas);
+    
+    // 초기 실행
+    if (img.complete) syncCanvas();
+
+    return () => {
+      observer.disconnect();
+      img.removeEventListener('load', syncCanvas);
+      window.removeEventListener('resize', syncCanvas);
+    };
+  }, [previewUrl]);
+
+  // 좌표 변환 헬퍼
   const getImgCoords = (e: React.MouseEvent) => {
     const canvas = canvasRef.current;
     const img = imgRef.current;
     if (!canvas || !img) return null;
 
     const rect = canvas.getBoundingClientRect();
+    // Canvas CSS 크기가 이미지 표시 크기와 같으므로 비율 계산이 정확해짐
     const scaleX = img.naturalWidth / rect.width;
     const scaleY = img.naturalHeight / rect.height;
 
@@ -178,9 +219,8 @@ export function InventoryImageInput({ file, previewUrl, loading, progress, onFil
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
-    
+    // canvas.width/height는 syncCanvas에서 관리하므로 여기서는 설정하지 않음
+    // 단, 그리기 전에 clear는 필요
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.lineWidth = 4;
     
@@ -245,8 +285,7 @@ export function InventoryImageInput({ file, previewUrl, loading, progress, onFil
               />
               <canvas 
                 ref={canvasRef}
-                className="absolute inset-0 w-full h-full cursor-crosshair"
-                style={{ width: 'auto', height: '100%' }}
+                className="absolute cursor-crosshair"
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
