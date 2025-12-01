@@ -144,13 +144,12 @@ export const detectInventorySlots = (imageData: ImageData, _threshold = 50): Rec
   // 면적이 큰 순서대로 정렬 -> 큰 박스가 우선권 가짐
   allCandidates.sort((a, b) => (b.width * b.height) - (a.width * a.height));
 
-  const finalSlots: Rect[] = [];
+  const nmsSlots: Rect[] = [];
 
   for (const candidate of allCandidates) {
     let shouldAdd = true;
 
-    for (const existing of finalSlots) {
-      // 두 사각형의 교차 영역 계산
+    for (const existing of nmsSlots) {
       const x1 = Math.max(candidate.x, existing.x);
       const y1 = Math.max(candidate.y, existing.y);
       const x2 = Math.min(candidate.x + candidate.width, existing.x + existing.width);
@@ -160,8 +159,7 @@ export const detectInventorySlots = (imageData: ImageData, _threshold = 50): Rec
         const intersection = (x2 - x1) * (y2 - y1);
         const candidateArea = candidate.width * candidate.height;
         
-        // 교차 영역이 후보(작은 박스) 면적의 75% 이상일 때만 중복/포함으로 간주
-        // (아이템들이 다닥다닥 붙어있을 수 있으므로 기준을 높임)
+        // 교차 영역이 75% 이상이면 중복으로 간주
         if (intersection / candidateArea > 0.75) {
           shouldAdd = false;
           break;
@@ -170,11 +168,28 @@ export const detectInventorySlots = (imageData: ImageData, _threshold = 50): Rec
     }
 
     if (shouldAdd) {
-      finalSlots.push(candidate);
+      nmsSlots.push(candidate);
     }
   }
 
-  // 3. 정렬 (상단 -> 하단, 좌 -> 우)
+  // 3. 통계적 필터링 (Median Size Filtering) - "작은 박스" 문제 해결
+  // 감지된 박스들의 너비/높이 중앙값을 구해서, 너무 작은 박스(노이즈)를 제거
+  if (nmsSlots.length === 0) return [];
+
+  const widths = nmsSlots.map(s => s.width).sort((a, b) => a - b);
+  const heights = nmsSlots.map(s => s.height).sort((a, b) => a - b);
+  const mid = Math.floor(nmsSlots.length / 2);
+  const medianW = widths[mid];
+  const medianH = heights[mid];
+
+  const finalSlots = nmsSlots.filter(s => {
+    // 중앙값의 50%보다 작으면 "아이템"이 아니라 "부속품/노이즈"일 확률이 높음
+    // 단, 가로/세로 2칸 차지하는 아이템이 있을 수 있으므로 한쪽 변만 작아도 의심
+    if (s.width < medianW * 0.5 || s.height < medianH * 0.5) return false;
+    return true;
+  });
+
+  // 4. 정렬 (상단 -> 하단, 좌 -> 우)
   finalSlots.sort((a, b) => {
     const yDiff = Math.abs(a.y - b.y);
     if (yDiff < height * 0.05) {
