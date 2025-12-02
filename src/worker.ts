@@ -238,7 +238,7 @@ self.onmessage = async (e) => {
              if (embeddings[base]) expanded.add(base);
              // Add variants
              allKeys.forEach(k => {
-               if (k.startsWith(base + '__var_')) expanded.add(k);
+               if (k.startsWith(base + '__bg_')) expanded.add(k);
              });
            });
            labelsToCheck = Array.from(expanded);
@@ -253,8 +253,9 @@ self.onmessage = async (e) => {
             
             const score = cosineSimilarity(queryVec, ref);
             
-            // Strip suffix (e.g. "Bandage__var_x5" -> "Bandage")
-            const baseLabel = fullLabel.split('__var_')[0];
+            // Strip suffix (e.g. "Bandage__bg_gray_x5" -> "Bandage")
+            // New format uses __bg_ as separator
+            const baseLabel = fullLabel.split('__bg_')[0];
             
             const currentMax = scoresByLabel.get(baseLabel) || -1;
             if (score > currentMax) {

@@ -138,44 +138,57 @@ async function main() {
   const result = {};
 
   // Augmentation 설정
-  const VARIANTS = [
-    { suffix: '', text: null }, // 원본 (Clean)
-    { suffix: '__var_x5', text: 'x5' }, // 수량 표시 1
-    { suffix: '__var_99', text: '99' }, // 수량 표시 2
-    { suffix: '__var_big', text: '250' }, // 큰 숫자
+  const BACKGROUNDS = {
+    gray: { r: 31, g: 41, b: 55, alpha: 1 }, // #1f2937 (Default)
+    green: { r: 6, g: 78, b: 59, alpha: 1 }, // #064e3b (Uncommon)
+    blue: { r: 30, g: 58, b: 138, alpha: 1 }, // #1e3a8a (Rare)
+    purple: { r: 88, g: 28, b: 135, alpha: 1 }, // #581c87 (Epic)
+  };
+
+  const TEXT_VARIANTS = [
+    { suffix: '', text: null },       // No text
+    { suffix: '_x5', text: 'x5' },    // Common quantity
+    { suffix: '_99', text: '99' },    // Max stack
   ];
 
   let count = 0;
 
   for (const { name, file } of pairs) {
     try {
-      // 1. 기본 베이스 이미지 로드 (224x224, 배경색 #1f2937)
-      const baseBuffer = await sharp(file)
-        .resize(224, 224, { fit: 'contain', background: { r: 31, g: 41, b: 55, alpha: 1 } })
-        .flatten({ background: { r: 31, g: 41, b: 55 } })
-        .toFormat('png')
-        .toBuffer();
+      // 아이콘 원본 로드 (리사이징 전)
+      const originalBuffer = await sharp(file).toBuffer();
 
-      // 2. 변형(Variant) 생성 및 임베딩
-      for (const variant of VARIANTS) {
-        let finalBuffer = baseBuffer;
-
-        // 텍스트 합성이 필요한 경우
-        if (variant.text) {
-          const svg = createTextOverlay(variant.text);
-          finalBuffer = await sharp(baseBuffer)
-            .composite([{ input: Buffer.from(svg), gravity: 'southeast' }])
-            .toBuffer();
-        }
-
-        // CLIP Feature Extraction
-        const rawImage = await RawImage.fromBlob(new Blob([finalBuffer]));
-        const output = await extractor(rawImage, { pooling: 'mean', normalize: true });
-        const vec = Array.from(output.data ?? output);
+      // 모든 배경색 x 모든 텍스트 조합 생성 (Cross Product)
+      for (const [bgName, bgColor] of Object.entries(BACKGROUNDS)) {
         
-        // 키 이름 생성 (예: Bandage, Bandage__var_x5)
-        const key = name + variant.suffix;
-        result[key] = normalize(vec);
+        // 1. 배경 합성 및 리사이징
+        const baseBuffer = await sharp(originalBuffer)
+          .resize(224, 224, { fit: 'contain', background: bgColor })
+          .flatten({ background: bgColor })
+          .toFormat('png')
+          .toBuffer();
+
+        for (const textVar of TEXT_VARIANTS) {
+          let finalBuffer = baseBuffer;
+
+          // 2. 텍스트 오버레이 합성
+          if (textVar.text) {
+            const svg = createTextOverlay(textVar.text);
+            finalBuffer = await sharp(baseBuffer)
+              .composite([{ input: Buffer.from(svg), gravity: 'southeast' }])
+              .toBuffer();
+          }
+
+          // 3. 임베딩 생성
+          const rawImage = await RawImage.fromBlob(new Blob([finalBuffer]));
+          const output = await extractor(rawImage, { pooling: 'mean', normalize: true });
+          const vec = Array.from(output.data ?? output);
+          
+          // 키 이름 생성 (예: Bandage__bg_gray_x5)
+          // worker.ts에서 __bg_... 로 분리하여 베이스 이름 추출 가능
+          const key = `${name}__bg_${bgName}${textVar.suffix}`;
+          result[key] = normalize(vec);
+        }
       }
 
       count++;
