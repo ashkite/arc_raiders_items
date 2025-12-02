@@ -106,26 +106,47 @@ const morphClose = (data: Uint8Array, width: number, height: number, size: numbe
   return erode(dilate(data, width, height, size), width, height, size);
 };
 
-const getMedian = (values: number[]) => {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+// NMS (Non-Maximum Suppression)
+const performNMS = (candidates: Rect[], threshold = 0.6): Rect[] => {
+  // 면적 기준 내림차순 정렬 (큰 박스 우선)
+  candidates.sort((a, b) => (b.width * b.height) - (a.width * a.height));
+  
+  const uniqueSlots: Rect[] = [];
+
+  for (const cand of candidates) {
+    let isDuplicate = false;
+    for (const exist of uniqueSlots) {
+      const x1 = Math.max(cand.x, exist.x);
+      const y1 = Math.max(cand.y, exist.y);
+      const x2 = Math.min(cand.x + cand.width, exist.x + exist.width);
+      const y2 = Math.min(cand.y + cand.height, exist.y + exist.height);
+
+      if (x2 > x1 && y2 > y1) {
+        const intersection = (x2 - x1) * (y2 - y1);
+        const candArea = cand.width * cand.height;
+        
+        // 교차 영역이 후보(작은 박스) 면적의 threshold 비율 이상이면 중복
+        // 즉, 작은 박스가 큰 박스 안에 대부분 포함되어 있다면 제거
+        if (intersection / candArea > threshold) {
+          isDuplicate = true;
+          break;
+        }
+      }
+    }
+    if (!isDuplicate) uniqueSlots.push(cand);
+  }
+  return uniqueSlots;
 };
 
-// 격자 추론 및 채우기 (Grid Inference)
 const fillMissingGridSlots = (slots: Rect[], imgWidth: number, imgHeight: number): Rect[] => {
   if (slots.length < 3) return slots;
 
-  // 1. 통계 분석
   const unitW = getMedian(slots.map(s => s.width));
   const unitH = getMedian(slots.map(s => s.height));
 
-  // X, Y 좌표들의 군집(Cluster)을 찾아서 행/열 가이드라인을 만듦
   const xCenters = slots.map(s => s.x + s.width / 2).sort((a, b) => a - b);
   const yCenters = slots.map(s => s.y + s.height / 2).sort((a, b) => a - b);
 
-  // 비슷한 좌표끼리 묶음 (Tolerance: unit size * 0.3)
   const groupCoords = (coords: number[], tolerance: number) => {
     const groups: number[] = [];
     if (coords.length === 0) return groups;
@@ -146,21 +167,18 @@ const fillMissingGridSlots = (slots: Rect[], imgWidth: number, imgHeight: number
   const colGuides = groupCoords(xCenters, unitW * 0.5);
   const rowGuides = groupCoords(yCenters, unitH * 0.5);
 
-  // 2. 가상 격자 생성 및 누락 확인
   const finalSlots = [...slots];
   
   rowGuides.forEach(cy => {
     colGuides.forEach(cx => {
-      // (cx, cy) 위치에 기존 슬롯이 있는지 확인
+      // 기존 슬롯과의 중복 체크 허용 오차 완화 (0.4 -> 0.5)
       const exists = slots.some(s => {
         const sx = s.x + s.width / 2;
         const sy = s.y + s.height / 2;
-        return Math.abs(sx - cx) < unitW * 0.4 && Math.abs(sy - cy) < unitH * 0.4;
+        return Math.abs(sx - cx) < unitW * 0.5 && Math.abs(sy - cy) < unitH * 0.5;
       });
 
       if (!exists) {
-        // 누락된 슬롯 추가
-        // 이미지 경계 체크
         const newX = cx - unitW / 2;
         const newY = cy - unitH / 2;
         
@@ -193,12 +211,10 @@ export const detectInventorySlots = (imageData: ImageData, threshold = 40): Rect
     binary[i] = edges[i] > threshold ? 1 : 0;
   }
 
-  // 3. Morphological Closing (끊어진 테두리 연결 및 내부 노이즈 채우기)
-  // Grid 선을 굵게 만들어서 박스 내부를 채우는 것이 아니라, 박스 테두리를 연결함
-  // 여기서는 Kernel Size 5~7 정도로 Closing하여 박스 형태를 복원
+  // 3. Morphological Closing
   const closed = morphClose(binary, width, height, 5);
 
-  // 4. CCL (Connected Component Labeling)
+  // 4. CCL
   const labels = new Int32Array(size).fill(0);
   let nextLabel = 1;
   const parent: number[] = [];
@@ -253,7 +269,7 @@ export const detectInventorySlots = (imageData: ImageData, threshold = 40): Rect
   }
 
   // 6. 1차 필터링
-  const minArea = size * 0.0015; // 너무 작은 노이즈 제거
+  const minArea = size * 0.002; // 노이즈 필터링 기준 상향 (0.0015 -> 0.002)
   const maxArea = size * 0.5;
   const candidates: Rect[] = [];
 
@@ -263,39 +279,21 @@ export const detectInventorySlots = (imageData: ImageData, threshold = 40): Rect
     const area = w * h;
 
     if (area < minArea || area > maxArea) return;
-    // Edge 기반이므로 박스 내부가 비어있을 수 있음 -> Aspect Ratio로만 주로 판단
     const aspect = w / h;
     if (aspect < 0.5 || aspect > 3.0) return;
 
     candidates.push({ x: b.x, y: b.y, width: w, height: h });
   });
 
-  // 7. NMS (겹치는 박스 정리 - 내부 포함 관계 위주)
-  candidates.sort((a, b) => (b.width * b.height) - (a.width * a.height));
-  let uniqueSlots: Rect[] = [];
-
-  for (const cand of candidates) {
-    let isDuplicate = false;
-    for (const exist of uniqueSlots) {
-      const x1 = Math.max(cand.x, exist.x);
-      const y1 = Math.max(cand.y, exist.y);
-      const x2 = Math.min(cand.x + cand.width, exist.x + exist.width);
-      const y2 = Math.min(cand.y + cand.height, exist.y + exist.height);
-
-      if (x2 > x1 && y2 > y1) {
-        const intersection = (x2 - x1) * (y2 - y1);
-        // 겹치는 영역이 후보 면적의 60% 이상이면 중복으로 처리
-        if (intersection / (cand.width * cand.height) > 0.6) {
-          isDuplicate = true;
-          break;
-        }
-      }
-    }
-    if (!isDuplicate) uniqueSlots.push(cand);
-  }
+  // 7. 1차 NMS
+  let uniqueSlots = performNMS(candidates, 0.6);
 
   // 8. Grid Inference (누락된 슬롯 복원)
-  const refinedSlots = fillMissingGridSlots(uniqueSlots, width, height);
+  let refinedSlots = fillMissingGridSlots(uniqueSlots, width, height);
+
+  // 9. 최종 NMS (Grid 추가로 생긴 중복 제거)
+  // 더 강력한 기준(0.5) 적용: 50%만 겹쳐도 제거
+  refinedSlots = performNMS(refinedSlots, 0.5);
 
   return refinedSlots.sort((a, b) => {
     const yDiff = Math.abs(a.y - b.y);
