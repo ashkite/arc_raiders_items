@@ -219,17 +219,51 @@ self.onmessage = async (e) => {
 
       const results = batchVectors.map((queryVec, idx) => {
         // Use specific candidates if provided for this image, otherwise use all available embeddings
-        const labelsToCheck: string[] = (candidatesList && candidatesList[idx] && candidatesList[idx].length > 0)
+        const initialLabels: string[] = (candidatesList && candidatesList[idx] && candidatesList[idx].length > 0)
           ? candidatesList[idx]
           : Object.keys(embeddings);
 
-        const scored = labelsToCheck
-          .map((label: string) => {
-            const ref = embeddings[label];
-            if (!ref) return null;
-            return { label, score: cosineSimilarity(queryVec, ref) };
-          })
-          .filter(Boolean) as { label: string; score: number }[];
+        // 1. Expand candidates to include variants (if filtering is active)
+        // If no filter (checking all), initialLabels already has all variants.
+        // If filter exists, we need to find variants matching the base names.
+        let labelsToCheck = initialLabels;
+        if (candidatesList && candidatesList[idx] && candidatesList[idx].length > 0) {
+           // This is a bit slow if candidates are many, but usually it's for small subsets.
+           // Optimization: If needed, we could pre-calculate this map.
+           const allKeys = Object.keys(embeddings);
+           const expanded = new Set<string>();
+           initialLabels.forEach(base => {
+             // Add base
+             if (embeddings[base]) expanded.add(base);
+             // Add variants
+             allKeys.forEach(k => {
+               if (k.startsWith(base + '__var_')) expanded.add(k);
+             });
+           });
+           labelsToCheck = Array.from(expanded);
+        }
+
+        // 2. Calculate scores and group by base name
+        const scoresByLabel = new Map<string, number>();
+
+        labelsToCheck.forEach((fullLabel) => {
+            const ref = embeddings[fullLabel];
+            if (!ref) return;
+            
+            const score = cosineSimilarity(queryVec, ref);
+            
+            // Strip suffix (e.g. "Bandage__var_x5" -> "Bandage")
+            const baseLabel = fullLabel.split('__var_')[0];
+            
+            const currentMax = scoresByLabel.get(baseLabel) || -1;
+            if (score > currentMax) {
+                scoresByLabel.set(baseLabel, score);
+            }
+        });
+
+        // 3. Convert to array and sort
+        const scored = Array.from(scoresByLabel.entries())
+            .map(([label, score]) => ({ label, score }));
 
         if (scored.length === 0) return { label: "Unknown", score: 0 };
 
