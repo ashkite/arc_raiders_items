@@ -101,7 +101,8 @@ const loadEmbeddings = async () => {
       try {
         // Use BASE_URL injected by Vite for correct path in GitHub Pages
         const baseUrl = import.meta.env.BASE_URL;
-        const url = baseUrl + 'embeddings.json';
+        // Add timestamp to bypass cache
+        const url = baseUrl + 'embeddings.json?v=' + Date.now();
         const res = await fetch(url);
         if (!res.ok) throw new Error(`Failed to fetch embeddings: ${res.status}`);
         const json = await res.json() as Record<string, number[]>;
@@ -265,7 +266,7 @@ self.onmessage = async (e) => {
         const scored = Array.from(scoresByLabel.entries())
             .map(([label, score]) => ({ label, score }));
 
-        if (scored.length === 0) return { label: "Unknown", score: 0 };
+        if (scored.length === 0) return [{ label: "Unknown", score: 0 }];
 
         scored.sort((a, b) => b.score - a.score);
         // Return top 5 candidates for re-ranking

@@ -195,9 +195,15 @@ export const useAiVision = () => {
 
     // 3. Merge results back
     if (workerResult && Array.isArray(workerResult)) {
-      workerResult.forEach((res, idx) => {
+      workerResult.forEach((res: any, idx) => {
         const originalIndex = pendingIndices[idx];
-        results[originalIndex] = res;
+        // Worker returns array of candidates, take the top one
+        if (Array.isArray(res) && res.length > 0) {
+            results[originalIndex] = res[0];
+        } else if (res && !Array.isArray(res)) {
+             // Fallback for legacy/single object return
+            results[originalIndex] = res;
+        }
       });
     }
 
