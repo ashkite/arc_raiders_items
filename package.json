@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "predeploy": "npm run build",
+    "predeploy": "npm run build && rm -rf dist/models",
     "deploy": "gh-pages -d dist",
     "download-model": "node scripts/download-model.js",
     "fetch:gamedata": "node scripts/fetch-gamedata.js",

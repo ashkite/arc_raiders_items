@@ -22,7 +22,7 @@ ARC Raiders 게임의 인벤토리를 관리하고, 스크린샷을 통해 아�
     ```
 
 2.  **AI 모델 다운로드**
-    이미지 분석에 사용되는 비전 전용 모델 `Xenova/clip-vit-base-patch32-vision`을 로컬로 다운로드합니다. (이전에 모델을 받았다면 새 경로 `/public/models/Xenova/clip-vit-base-patch32-vision`에 다시 받아주세요.)
+    이미지 분석에 사용되는 비전 전용 모델 `Xenova/clip-vit-base-patch16`을 로컬로 다운로드합니다. (이전에 모델을 받았다면 새 경로 `/public/models/Xenova/clip-vit-base-patch16`에 다시 받아주세요.)
     ```bash
     npm run download-model
     ```
