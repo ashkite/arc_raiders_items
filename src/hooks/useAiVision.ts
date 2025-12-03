@@ -92,14 +92,34 @@ function getWorker(): Worker {
   return globalWorker as Worker;
 }
 
+type ReadyState = 'idle' | 'loading' | 'ready' | 'error';
+
 export const useAiVision = () => {
-  const [isReady, setIsReady] = useState(false);
+  const [readyState, setReadyState] = useState<ReadyState>('idle');
+  const [readyError, setReadyError] = useState<string | null>(null);
 
   useEffect(() => {
     const w = getWorker();
-    // Pre-load model immediately
+    setReadyState('loading');
+    setReadyError(null);
+    const handleReady = (e: MessageEvent) => {
+      if (e.data?.status === 'ready') {
+        setReadyState('ready');
+      }
+      if (e.data?.status === 'error') {
+        console.error('[AiVision] Worker failed to initialize', e.data.error);
+        setReadyState('error');
+        setReadyError(e.data.error || 'Unknown initialization error');
+      }
+    };
+
+    // Listen for worker readiness (separate from RPC responses)
+    w.addEventListener('message', handleReady);
     w.postMessage({ type: 'init', id: 'init-sequence' });
-    setIsReady(true);
+
+    return () => {
+      w.removeEventListener('message', handleReady);
+    };
   }, []);
 
   const analyzeBatch = useCallback(async (
@@ -210,5 +230,5 @@ export const useAiVision = () => {
     return results;
   }, []);
 
-  return { analyzeBatch, isReady };
+  return { analyzeBatch, isReady: readyState === 'ready', readyState, readyError };
 };

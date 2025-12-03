@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { ChevronRight, Activity } from 'lucide-react';
 import { RecognizeResult } from 'tesseract.js';
 import { Layout } from './components/Layout';
@@ -25,17 +25,26 @@ function App() {
   const ocrResultRef = useRef<RecognizeResult | null>(null);
   const imgElementRef = useRef<HTMLImageElement | null>(null);
 
-  const { analyzeBatch, isReady: isVisionReady } = useAiVision();
+  const { analyzeBatch, isReady: isVisionReady, readyState, readyError } = useAiVision();
 
-  // Sync vision readiness
-  if (isVisionReady && modelStatus === 'idle') {
-      setModelStatus('ready');
-  }
-
-  const addLog = (msg: string) => {
+  const addLog = useCallback((msg: string) => {
     setDebugLog(prev => prev + `[${new Date().toLocaleTimeString()}] ${msg}\n`);
     setStatus(msg);
-  };
+  }, []);
+
+  // Sync vision readiness
+  useEffect(() => {
+    if (readyState === 'ready') {
+      setModelStatus('ready');
+    } else if (readyState === 'loading' && modelStatus === 'idle') {
+      setModelStatus('loading_model');
+    } else if (readyState === 'error') {
+      setModelStatus('error');
+      if (readyError) {
+        addLog(`AI 모델 초기화 실패: ${readyError}`);
+      }
+    }
+  }, [addLog, readyError, readyState, modelStatus]);
 
   // 공통 분석 로직 (Blob 리스트 -> AI 분석) with batch parallelism + progressive rendering
   const runAnalysisLoop = async (blobs: Rect[], img: HTMLImageElement, ocrWords: any[]) => {
